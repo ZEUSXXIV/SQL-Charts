@@ -229,6 +229,13 @@ namespace QuerySight.Extension
                     }
                 }
 
+                // Try to get the active editor's currently selected database name via ServiceCache.ExtensibilityModel (DTE)
+                string activeEditorDb = GetActiveEditorDatabaseName();
+                if (!string.IsNullOrEmpty(activeEditorDb))
+                {
+                    databaseName = activeEditorDb;
+                }
+
                 var builder = new System.Data.SqlClient.SqlConnectionStringBuilder();
                 builder.DataSource = serverName;
                 if (useIntegratedSecurity)
@@ -251,6 +258,71 @@ namespace QuerySight.Extension
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Error building connection string: " + ex.Message);
+            }
+            return null;
+        }
+
+        private static string GetActiveEditorDatabaseName()
+        {
+            try
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    if (assembly.FullName.StartsWith("SqlPackageBase") || 
+                        assembly.FullName.StartsWith("SqlWorkbench") || 
+                        assembly.FullName.StartsWith("Microsoft.SqlServer.Management.SDK.SqlStudio"))
+                    {
+                        Type serviceCacheType = assembly.GetType("Microsoft.SqlServer.Management.UI.VSIntegration.ServiceCache");
+                        if (serviceCacheType != null)
+                        {
+                            var extensibilityModelProperty = serviceCacheType.GetProperty("ExtensibilityModel", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                            if (extensibilityModelProperty != null)
+                            {
+                                object dte = extensibilityModelProperty.GetValue(null);
+                                if (dte != null)
+                                {
+                                    var activeDocProp = dte.GetType().GetProperty("ActiveDocument", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                    if (activeDocProp != null)
+                                    {
+                                        object activeDocument = activeDocProp.GetValue(dte);
+                                        if (activeDocument != null)
+                                        {
+                                            var activeWindowProp = activeDocument.GetType().GetProperty("ActiveWindow", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                            if (activeWindowProp != null)
+                                            {
+                                                object activeWindow = activeWindowProp.GetValue(activeDocument);
+                                                if (activeWindow != null)
+                                                {
+                                                    var objectProp = activeWindow.GetType().GetProperty("Object", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                                    if (objectProp != null)
+                                                    {
+                                                        object editorControl = objectProp.GetValue(activeWindow);
+                                                        if (editorControl != null)
+                                                        {
+                                                            var currentDbProp = editorControl.GetType().GetProperty("CurrentDB", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                                            if (currentDbProp != null)
+                                                            {
+                                                                string currentDb = currentDbProp.GetValue(editorControl) as string;
+                                                                if (!string.IsNullOrEmpty(currentDb))
+                                                                {
+                                                                    return currentDb;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Error getting active editor database name: " + ex.Message);
             }
             return null;
         }

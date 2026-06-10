@@ -120,6 +120,17 @@ namespace QuerySight.Extension
                     return;
                 }
 
+                // Parse out the database name to display it to the user
+                string dbName = "Unknown";
+                try
+                {
+                    var builder = new System.Data.SqlClient.SqlConnectionStringBuilder(connString);
+                    dbName = builder.InitialCatalog;
+                }
+                catch {}
+
+                ShowStatus($"Running query against '{dbName}'...", true);
+
                 // Run SQL query on background thread
                 string jsonPayload = await System.Threading.Tasks.Task.Run(() =>
                 {
@@ -128,7 +139,7 @@ namespace QuerySight.Extension
 
                 // Render chart inside WebView2
                 RenderChart(jsonPayload);
-                ShowStatus("Chart generated successfully!", true);
+                ShowStatus($"Chart generated successfully from database '{dbName}'!", true);
             }
             catch (Exception ex)
             {
@@ -275,6 +286,46 @@ namespace QuerySight.Extension
                         Type serviceCacheType = assembly.GetType("Microsoft.SqlServer.Management.UI.VSIntegration.ServiceCache");
                         if (serviceCacheType != null)
                         {
+                            var scriptFactoryProperty = serviceCacheType.GetProperty("ScriptFactory", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                            var vsMonitorSelectionProperty = serviceCacheType.GetProperty("VSMonitorSelection", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                            
+                            if (scriptFactoryProperty != null && vsMonitorSelectionProperty != null)
+                            {
+                                object scriptFactory = scriptFactoryProperty.GetValue(null);
+                                object vsMonitorSelection = vsMonitorSelectionProperty.GetValue(null);
+                                
+                                if (scriptFactory != null && vsMonitorSelection != null)
+                                {
+                                    // 1. First try using the internal GetCurrentlyActiveFrameDocView method on ScriptFactory (most reliable inside SSMS)
+                                    var getDocViewMethod = GetMethodAnywhere(
+                                        scriptFactory.GetType(), 
+                                        "GetCurrentlyActiveFrameDocView", 
+                                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                        
+                                    if (getDocViewMethod != null)
+                                    {
+                                        object docView = getDocViewMethod.Invoke(scriptFactory, new object[] { vsMonitorSelection, false, null });
+                                        if (docView != null)
+                                        {
+                                            var currentDbProp = GetPropertyAnywhere(
+                                                docView.GetType(), 
+                                                "CurrentDB", 
+                                                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                                
+                                            if (currentDbProp != null)
+                                            {
+                                                string currentDb = currentDbProp.GetValue(docView) as string;
+                                                if (!string.IsNullOrEmpty(currentDb))
+                                                {
+                                                    return currentDb;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 2. Fallback: Try using ExtensibilityModel (DTE) if the ScriptFactory direct invoke failed
                             var extensibilityModelProperty = serviceCacheType.GetProperty("ExtensibilityModel", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
                             if (extensibilityModelProperty != null)
                             {
@@ -299,7 +350,11 @@ namespace QuerySight.Extension
                                                         object editorControl = objectProp.GetValue(activeWindow);
                                                         if (editorControl != null)
                                                         {
-                                                            var currentDbProp = editorControl.GetType().GetProperty("CurrentDB", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                                            var currentDbProp = GetPropertyAnywhere(
+                                                                editorControl.GetType(), 
+                                                                "CurrentDB", 
+                                                                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                                                
                                                             if (currentDbProp != null)
                                                             {
                                                                 string currentDb = currentDbProp.GetValue(editorControl) as string;
@@ -323,6 +378,28 @@ namespace QuerySight.Extension
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Error getting active editor database name: " + ex.Message);
+            }
+            return null;
+        }
+
+        private static MethodInfo GetMethodAnywhere(Type type, string name, BindingFlags flags)
+        {
+            while (type != null)
+            {
+                var method = type.GetMethod(name, flags);
+                if (method != null) return method;
+                type = type.BaseType;
+            }
+            return null;
+        }
+
+        private static PropertyInfo GetPropertyAnywhere(Type type, string name, BindingFlags flags)
+        {
+            while (type != null)
+            {
+                var prop = type.GetProperty(name, flags);
+                if (prop != null) return prop;
+                type = type.BaseType;
             }
             return null;
         }

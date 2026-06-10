@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31902.203
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "QuerySight.Extension", "src\QuerySight.Extension\QuerySight.Extension.csproj", "{856D1F9C-5D63-4C3D-B1CE-D5B7EEA2834E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{856D1F9C-5D63-4C3D-B1CE-D5B7EEA2834E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{856D1F9C-5D63-4C3D-B1CE-D5B7EEA2834E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{856D1F9C-5D63-4C3D-B1CE-D5B7EEA2834E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{856D1F9C-5D63-4C3D-B1CE-D5B7EEA2834E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A0E8004C-A2C3-43C1-93D2-6E864EE920AF}
+	EndGlobalSection
+EndGlobal

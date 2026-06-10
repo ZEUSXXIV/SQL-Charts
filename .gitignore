@@ -1,0 +1,11 @@
+# Build artifacts
+bin/
+obj/
+*.vsix
+
+# Visual Studio files
+.vs/
+
+# Python caching
+__pycache__/
+*.pyc

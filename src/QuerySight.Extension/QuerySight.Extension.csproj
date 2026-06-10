@@ -1,4 +1,5 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -13,7 +14,20 @@
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
     <CreateVsixContainer>true</CreateVsixContainer>
-    <DeployExtension>true</DeployExtension>
+    <DeployExtension>false</DeployExtension>
+    
+    <!-- Enable Codebase Registration to resolve DLL location in isolated shells -->
+    <RegisterWithCodebase>true</RegisterWithCodebase>
+    
+    <!-- Specify Visual Studio version -->
+    <VisualStudioVersion>17.0</VisualStudioVersion>
+    
+    <!-- Flatten folders to prevent path mismatch between .NET SDK and VSSDK -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+    
+    <!-- Disable default page items to allow explicit WPF compilation config -->
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
     
     <!-- WPF Enablement -->
     <UseWpf>true</UseWpf>
@@ -21,7 +35,18 @@
     
     <!-- VSIX packaging flags -->
     <ExtensionInstallationFolder>QuerySight</ExtensionInstallationFolder>
+    
+    <!-- Fix VSSDK resource manifest path issue in SDK-style projects -->
+    <ResourceManifest>$(MSBuildProjectDirectory)\obj\$(Configuration)\resources.json</ResourceManifest>
   </PropertyGroup>
+
+  <!-- Explicitly declare WPF XAML Pages for .NET Framework SDK-style compilation -->
+  <ItemGroup>
+    <Page Include="QuerySightToolWindowControl.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Keep manifest and html asset as Content for the VSIX compiler -->
@@ -44,7 +69,7 @@
   <ItemGroup>
     <!-- Visual Studio SDK packages for VS 2022 / SSMS 22 (v17) compatibility -->
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.0.31902.203" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.0.5232" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.0.5232" PrivateAssets="all" GeneratePathProperty="true" />
     
     <!-- WebView2 package for the rendering canvas -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.1264.42" />
@@ -66,4 +91,35 @@
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
   </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+
+  <!-- Import VSSDK targets directly from NuGet package tools directory -->
+  <Import Project="$(PkgMicrosoft_VSSDK_BuildTools)\tools\VSSDK\Microsoft.VsSDK.targets" Condition="Exists('$(PkgMicrosoft_VSSDK_BuildTools)\tools\VSSDK\Microsoft.VsSDK.targets')" />
+
+  <!-- Inject our resolver target into the GeneratePkgDef dependency chain -->
+  <PropertyGroup>
+    <GeneratePkgDefDependsOn>
+      ResolveCreatePkgDefAssemblyToProcess;
+      $(GeneratePkgDefDependsOn)
+    </GeneratePkgDefDependsOn>
+  </PropertyGroup>
+
+  <!-- Dynamically resolve CreatePkgDefAssemblyToProcess at target execution time once TargetPath is populated -->
+  <Target Name="ResolveCreatePkgDefAssemblyToProcess">
+    <PropertyGroup>
+      <CreatePkgDefAssemblyToProcess>$(TargetPath)</CreatePkgDefAssemblyToProcess>
+    </PropertyGroup>
+    <Message Importance="High" Text="[QuerySight Build] Resolved CreatePkgDefAssemblyToProcess dynamically to: $(CreatePkgDefAssemblyToProcess)" />
+  </Target>
+
+  <Target Name="PrintProps" BeforeTargets="Build">
+    <Message Importance="High" Text="[QuerySight Build] PkgMicrosoft_VSSDK_BuildTools: '$(PkgMicrosoft_VSSDK_BuildTools)'" />
+    <Message Importance="High" Text="[QuerySight Build] Exists: '$(PkgMicrosoft_VSSDK_BuildTools)\tools\VSSDK\Microsoft.VsSDK.targets' -> $([System.IO.File]::Exists('$(PkgMicrosoft_VSSDK_BuildTools)\tools\VSSDK\Microsoft.VsSDK.targets'))" />
+    <Message Importance="High" Text="[QuerySight Build] TargetVsixContainer: '$(TargetVsixContainer)'" />
+    <Message Importance="High" Text="[QuerySight Build] TargetVsixContainerName: '$(TargetVsixContainerName)'" />
+    <Message Importance="High" Text="[QuerySight Build] OutDir: '$(OutDir)'" />
+    <Message Importance="High" Text="[QuerySight Build] TargetName: '$(TargetName)'" />
+    <Message Importance="High" Text="[QuerySight Build] CreateVsixContainer: '$(CreateVsixContainer)'" />
+  </Target>
 </Project>

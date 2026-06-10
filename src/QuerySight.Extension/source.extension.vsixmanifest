@@ -6,12 +6,18 @@
     <Description>A Visual Studio 2022 &amp; SSMS 22 Extension that displays dynamic, interactive charts in a native Tool Window (WebView2) triggered by a local Python MCP Server.</Description>
   </Metadata>
   <Installation>
-    <!-- Microsoft.VisualStudio.Pro targets VS 2022 and SSMS 20/22 shell environments -->
-    <InstallationTarget Id="Microsoft.VisualStudio.Pro" Version="[17.0,18.0)" />
+    <!-- Target Microsoft.VisualStudio.Ssms for SSMS 20/22 isolated shells. amd64 is required. -->
+    <InstallationTarget Id="Microsoft.VisualStudio.Ssms" Version="[20.0, 23.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
   </Installation>
   <Dependencies>
     <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.8,)" />
   </Dependencies>
+  <Prerequisites>
+    <!-- Prerequisites are required for VSIX v3 compilation, targeting VS 2022 (v17) core shell -->
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.0,18.0)" DisplayName="Visual Studio core editor" />
+  </Prerequisites>
   <Assets>
     <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" ProjectName="QuerySight.Extension" Path="|QuerySight.Extension;PkgdefProjectOutputGroup|" />
   </Assets>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="QuerySight.Extension.3768d7a1-8d2a-43bc-be0b-b184d0843231" Version="1.0.0" Language="en-US" Publisher="Antigravity" />
+    <Identity Id="QuerySight.Extension.3768d7a1-8d2a-43bc-be0b-b184d0843231" Version="1.0.2" Language="en-US" Publisher="Antigravity" />
     <DisplayName>QuerySight Charting Extension</DisplayName>
     <Description>A Visual Studio 2022 &amp; SSMS 22 Extension that displays dynamic, interactive charts in a native Tool Window (WebView2) triggered by a local Python MCP Server.</Description>
   </Metadata>

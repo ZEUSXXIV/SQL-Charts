@@ -8,28 +8,68 @@
              d:DesignHeight="600" d:DesignWidth="800"
              Background="#1E1E1E">
     <Grid>
-        <!-- The WebView2 control that loads the charting web page -->
-        <wv2:WebView2 x:Name="webView" 
-                      HorizontalAlignment="Stretch" 
-                      VerticalAlignment="Stretch" 
-                      Visibility="Collapsed" />
-        
-        <!-- Loading state panel during WebView2/Extension startup -->
-        <Grid x:Name="loadingPanel" Background="#121212">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <ProgressBar IsIndeterminate="True" 
-                             Width="200" 
-                             Height="6" 
-                             Foreground="#A855F7" 
-                             Background="#1F2937" 
-                             BorderThickness="0" />
-                <TextBlock Text="Initializing QuerySight Canvas..." 
-                           Foreground="#9CA3AF" 
-                           FontSize="13" 
-                           Margin="0,15,0,0" 
-                           HorizontalAlignment="Center" 
-                           FontFamily="Segoe UI, Arial" />
-            </StackPanel>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Control Bar -->
+        <Border Grid.Row="0" Background="#18181B" BorderBrush="#27272A" BorderThickness="0,0,0,1" Padding="8,6">
+            <DockPanel LastChildFill="False">
+                <Button x:Name="btnToggleSql" Content="📝 SQL Query Panel" Click="BtnToggleSql_Click" 
+                        Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Padding="8,4" Margin="0,0,8,0" Cursor="Hand"/>
+                
+                <TextBlock Text="Chart:" VerticalAlignment="Center" Foreground="#A1A1AA" Margin="0,0,4,0"/>
+                <ComboBox x:Name="comboChartType" Width="90" SelectedIndex="0" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Padding="4" Margin="0,0,8,0">
+                    <ComboBoxItem Content="bar"/>
+                    <ComboBoxItem Content="line"/>
+                    <ComboBoxItem Content="pie"/>
+                </ComboBox>
+
+                <Button x:Name="btnRunChart" Content="⚡ Run &amp; Chart" Click="BtnRunChart_Click" 
+                        Background="#7C3AED" Foreground="White" BorderThickness="0" Padding="12,4" Cursor="Hand" FontWeight="SemiBold"/>
+
+                <TextBlock x:Name="txtStatus" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="#10B981" FontSize="11" TextWrapping="Wrap" MaxWidth="300"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Collapsible SQL Input Panel -->
+        <Border x:Name="sqlPanel" Grid.Row="1" Background="#09090B" BorderBrush="#27272A" BorderThickness="0,0,0,1" Padding="8" Visibility="Collapsed">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Enter SQL query (uses active SSMS query connection):" Foreground="#A1A1AA" FontSize="11" Margin="0,0,0,4"/>
+                <TextBox Grid.Row="1" x:Name="txtSqlScript" Height="80" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                         Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" CaretBrush="White" FontFamily="Consolas" FontSize="12" Padding="6"/>
+            </Grid>
+        </Border>
+
+        <!-- Main Charting View -->
+        <Grid Grid.Row="2">
+            <wv2:WebView2 x:Name="webView" 
+                          HorizontalAlignment="Stretch" 
+                          VerticalAlignment="Stretch" 
+                          Visibility="Collapsed" />
+            
+            <Grid x:Name="loadingPanel" Background="#121212">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ProgressBar IsIndeterminate="True" 
+                                 Width="200" 
+                                 Height="6" 
+                                 Foreground="#A855F7" 
+                                 Background="#1F2937" 
+                                 BorderThickness="0" />
+                    <TextBlock Text="Initializing QuerySight Canvas..." 
+                               Foreground="#9CA3AF" 
+                               FontSize="13" 
+                               Margin="0,15,0,0" 
+                               HorizontalAlignment="Center" 
+                               FontFamily="Segoe UI, Arial" />
+                </StackPanel>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

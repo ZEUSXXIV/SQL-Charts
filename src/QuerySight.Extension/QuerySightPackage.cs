@@ -13,6 +13,7 @@ namespace QuerySight.Extension
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("#110", "#112", "1.0", IconResourceID = 400)]
     [ProvideToolWindow(typeof(QuerySightToolWindow))]
+    [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(PackageGuidString)]
     [ProvideAutoLoad(Microsoft.VisualStudio.VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
     public sealed class QuerySightPackage : AsyncPackage

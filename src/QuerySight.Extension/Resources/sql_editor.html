@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1e1e1e;
+        }
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <!-- Load Monaco via AMD loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+    <script>
+        let editor = null;
+        let completionProvider = null;
+
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            // Configure editor
+            editor = monaco.editor.create(document.getElementById('container'), {
+                value: 'SELECT *\nFROM ',
+                language: 'sql',
+                theme: 'vs-dark',
+                fontSize: 12,
+                fontFamily: 'Consolas, Courier New, monospace',
+                automaticLayout: true,
+                minimap: { enabled: false },
+                lineNumbersMinChars: 3,
+                scrollbar: {
+                    vertical: 'auto',
+                    horizontal: 'auto'
+                }
+            });
+
+            // Focus on start
+            editor.focus();
+        });
+
+        // Host API Methods
+        window.getQueryText = function() {
+            return editor ? editor.getValue() : '';
+        };
+
+        window.setQueryText = function(text) {
+            if (editor) {
+                editor.setValue(text);
+            }
+        };
+
+        window.insertText = function(text) {
+            if (!editor) return;
+            const selection = editor.getSelection();
+            const range = new monaco.Range(
+                selection.startLineNumber,
+                selection.startColumn,
+                selection.endLineNumber,
+                selection.endColumn
+            );
+            const id = { major: 1, minor: 1 };
+            const textEdit = { identifier: id, range: range, text: text, forceMoveMarkers: true };
+            editor.executeEdits("my-source", [textEdit]);
+            editor.focus();
+        };
+
+        window.updateSchema = function(schemaJson) {
+            if (!monaco) return;
+            try {
+                const schema = JSON.parse(schemaJson); // Array of { TableName, Columns }
+                
+                // Dispose previous provider if it exists
+                if (completionProvider) {
+                    completionProvider.dispose();
+                }
+
+                // Register autocompletion provider for SQL
+                completionProvider = monaco.languages.registerCompletionItemProvider('sql', {
+                    provideCompletionItems: function(model, position) {
+                        const word = model.getWordUntilPosition(position);
+                        const range = {
+                            startLineNumber: position.lineNumber,
+                            endLineNumber: position.lineNumber,
+                            startColumn: word.startColumn,
+                            endColumn: word.endColumn
+                        };
+
+                        const suggestions = [];
+
+                        // Add tables and columns
+                        schema.forEach(item => {
+                            // Table Name
+                            suggestions.push({
+                                label: item.TableName,
+                                kind: monaco.languages.CompletionItemKind.Class,
+                                insertText: item.TableName,
+                                detail: 'Table / View',
+                                range: range
+                            });
+
+                            // Table Columns
+                            item.Columns.forEach(col => {
+                                suggestions.push({
+                                    label: col,
+                                    kind: monaco.languages.CompletionItemKind.Field,
+                                    insertText: col,
+                                    detail: `Column in ${item.TableName}`,
+                                    range: range
+                                });
+                            });
+                        });
+
+                        // Standard SQL Keywords
+                        const sqlKeywords = [
+                            "SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "JOIN", "ON",
+                            "INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "FULL JOIN", "CROSS JOIN",
+                            "AND", "OR", "IN", "LIKE", "IS NULL", "IS NOT NULL", "SUM", "AVG",
+                            "COUNT", "MIN", "MAX", "HAVING", "LIMIT", "AS", "DISTINCT", "INSERT INTO",
+                            "UPDATE", "DELETE", "CREATE TABLE", "DROP TABLE", "WITH"
+                        ];
+
+                        sqlKeywords.forEach(kw => {
+                            suggestions.push({
+                                label: kw,
+                                kind: monaco.languages.CompletionItemKind.Keyword,
+                                insertText: kw,
+                                range: range
+                            });
+                        });
+
+                        return { suggestions: suggestions };
+                    }
+                });
+                console.log("Monaco schema updated successfully with " + schema.length + " tables.");
+            } catch (err) {
+                console.error("Error updating Monaco schema: ", err);
+            }
+        };
+    </script>
+</body>
+</html>

@@ -179,9 +179,45 @@
                 </DockPanel>
 
                 <!-- SQL Editor View -->
-                <Grid x:Name="panelSqlEditor" Grid.Row="1" Visibility="Visible">
-                    <TextBox x:Name="txtSqlScript" Height="85" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                             Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" CaretBrush="White" FontFamily="Consolas" FontSize="12" Padding="6"/>
+                <Grid x:Name="panelSqlEditor" Grid.Row="1" Visibility="Visible" Height="130">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200" MinWidth="100" x:Name="colSidebar"/>
+                        <ColumnDefinition Width="4"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Sidebar Schema Explorer -->
+                    <Border Grid.Column="0" Background="#141417" BorderBrush="#27272A" BorderThickness="1" CornerRadius="4" Padding="4">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" LastChildFill="True" Margin="2,2,2,4">
+                                <Button x:Name="btnRefreshSidebar" Content="🔄" Click="BtnRefreshSidebar_Click" Width="20" Height="20" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Cursor="Hand" DockPanel.Dock="Right" ToolTip="Refresh database schema"/>
+                                <TextBlock Text="Schema Explorer" Foreground="#A1A1AA" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <TreeView Grid.Row="1" x:Name="treeSchema" MouseDoubleClick="TreeSchema_MouseDoubleClick" Background="Transparent" BorderThickness="0" Foreground="#E4E4E7">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem">
+                                        <Setter Property="Foreground" Value="#E4E4E7"/>
+                                        <Setter Property="Padding" Value="1,2"/>
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
+                            </TreeView>
+                        </Grid>
+                    </Border>
+
+                    <!-- Splitter -->
+                    <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#27272A" ResizeBehavior="PreviousAndNext"/>
+
+                    <!-- Monaco Editor WebView2 container -->
+                    <Border Grid.Column="2" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="4">
+                        <wv2:WebView2 x:Name="webViewMonaco" 
+                                      HorizontalAlignment="Stretch" 
+                                      VerticalAlignment="Stretch" 
+                                      Visibility="Visible"/>
+                    </Border>
                 </Grid>
 
                 <!-- Quick Builder View -->

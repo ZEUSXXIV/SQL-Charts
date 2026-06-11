@@ -49,6 +49,7 @@ namespace QuerySight.Extension
                 // 2. Create the custom CoreWebView2Environment
                 CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
                 await webView.EnsureCoreWebView2Async(env);
+                await webViewMonaco.EnsureCoreWebView2Async(env);
 
                 // 3. Map a virtual host name to the local directory where the extension is running.
                 // This makes it easy to load files relative to the installation path securely.
@@ -59,9 +60,14 @@ namespace QuerySight.Extension
                     assemblyFolder,
                     CoreWebView2HostResourceAccessKind.Allow);
 
-                // 4. Point the control to the virtual domain mapped HTML
-                // This resolves to the file: assemblyFolder\Resources\chart_canvas.html
+                webViewMonaco.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "querysight.local",
+                    assemblyFolder,
+                    CoreWebView2HostResourceAccessKind.Allow);
+
+                // 4. Point the controls to their virtual domain mapped HTML
                 webView.Source = new Uri("https://querysight.local/Resources/chart_canvas.html");
+                webViewMonaco.Source = new Uri("https://querysight.local/Resources/sql_editor.html");
 
                 webView.CoreWebView2.NavigationCompleted += (s, args) =>
                 {
@@ -108,10 +114,7 @@ namespace QuerySight.Extension
             if (sqlPanel.Visibility == Visibility.Visible)
             {
                 UpdateActiveConnectionUI();
-                if (_isQuickBuilderMode)
-                {
-                    TriggerLoadTables();
-                }
+                TriggerLoadTables();
             }
         }
 
@@ -162,17 +165,30 @@ namespace QuerySight.Extension
                 return;
             }
 
-            txtBuilderInfo.Text = "Loading tables and views...";
+            txtBuilderInfo.Text = "Loading tables, views, and schemas...";
             txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8)); // Sky Blue
             comboTables.IsEnabled = false;
 
             try
             {
-                var tables = await System.Threading.Tasks.Task.Run(() => GetDatabaseTables(connStr));
+                var schema = await System.Threading.Tasks.Task.Run(() => GetDatabaseSchema(connStr));
+                
+                // 1. Populate tables combo
                 comboTables.Items.Clear();
-                foreach (var table in tables)
+                foreach (var table in schema)
                 {
-                    comboTables.Items.Add(table);
+                    comboTables.Items.Add(table.TableName);
+                }
+
+                // 2. Populate sidebar tree
+                PopulateSchemaTree(schema);
+
+                // 3. Inject schema JSON to Monaco for autocomplete
+                if (webViewMonaco.CoreWebView2 != null)
+                {
+                    string schemaJson = Newtonsoft.Json.JsonConvert.SerializeObject(schema);
+                    string escapedJson = schemaJson.Replace("'", "\\'");
+                    await webViewMonaco.CoreWebView2.ExecuteScriptAsync($"window.updateSchema('{escapedJson}');");
                 }
 
                 _lastLoadedTablesConnection = connStr;
@@ -180,7 +196,7 @@ namespace QuerySight.Extension
 
                 if (comboTables.Items.Count > 0)
                 {
-                    txtBuilderInfo.Text = $"Loaded {comboTables.Items.Count} tables/views. Select one to map columns.";
+                    txtBuilderInfo.Text = "Schema loaded successfully. Autocomplete & Sidebar are active!";
                     txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green
                 }
                 else
@@ -194,6 +210,64 @@ namespace QuerySight.Extension
                 txtBuilderInfo.Text = $"Error loading schema: {ex.Message}";
                 txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
             }
+        }
+
+        private void PopulateSchemaTree(System.Collections.Generic.List<TableSchemaInfo> schema)
+        {
+            treeSchema.Items.Clear();
+            foreach (var table in schema)
+            {
+                var tableItem = new TreeViewItem();
+                tableItem.Header = $"📋 {table.TableName}";
+                tableItem.Tag = table.TableName;
+                tableItem.FontWeight = FontWeights.SemiBold;
+
+                foreach (var col in table.Columns)
+                {
+                    var colItem = new TreeViewItem();
+                    colItem.Header = $"🔹 {col}";
+                    colItem.Tag = col;
+                    colItem.FontWeight = FontWeights.Normal;
+                    tableItem.Items.Add(colItem);
+                }
+
+                treeSchema.Items.Add(tableItem);
+            }
+        }
+
+        private async void TreeSchema_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var selectedItem = treeSchema.SelectedItem as TreeViewItem;
+            if (selectedItem != null)
+            {
+                string textToInsert = selectedItem.Tag as string;
+                if (!string.IsNullOrEmpty(textToInsert))
+                {
+                    string text = textToInsert;
+                    
+                    if (!text.Contains(".") && !text.StartsWith("["))
+                    {
+                        text = $"[{text}]";
+                    }
+                    
+                    if (text.Contains(".") && !text.StartsWith("["))
+                    {
+                        text = string.Join(".", System.Array.ConvertAll(text.Split('.'), t => "[" + t.Trim('[', ']') + "]"));
+                    }
+
+                    if (webViewMonaco.CoreWebView2 != null)
+                    {
+                        string js = $"window.insertText('{text.Replace("'", "\\'")}');";
+                        await webViewMonaco.CoreWebView2.ExecuteScriptAsync(js);
+                    }
+                }
+            }
+        }
+
+        private void BtnRefreshSidebar_Click(object sender, RoutedEventArgs e)
+        {
+            _lastLoadedTablesConnection = null; // Force reload
+            TriggerLoadTables();
         }
 
         private async void ComboTables_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -250,14 +324,22 @@ namespace QuerySight.Extension
             // Optional aggregation helper
         }
 
-        private static System.Collections.Generic.List<string> GetDatabaseTables(string connectionString)
+        private static System.Collections.Generic.List<TableSchemaInfo> GetDatabaseSchema(string connectionString)
         {
-            var tables = new System.Collections.Generic.List<string>();
+            var schemaList = new System.Collections.Generic.List<TableSchemaInfo>();
             string query = @"
-                SELECT TABLE_SCHEMA + '.' + TABLE_NAME AS FullTableName
-                FROM INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_TYPE = 'BASE TABLE' OR TABLE_TYPE = 'VIEW'
-                ORDER BY TABLE_SCHEMA, TABLE_NAME;";
+                SELECT 
+                    t.TABLE_SCHEMA + '.' + t.TABLE_NAME AS TableName,
+                    c.COLUMN_NAME
+                FROM 
+                    INFORMATION_SCHEMA.TABLES t
+                JOIN 
+                    INFORMATION_SCHEMA.COLUMNS c 
+                    ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+                WHERE 
+                    t.TABLE_TYPE = 'BASE TABLE' OR t.TABLE_TYPE = 'VIEW'
+                ORDER BY 
+                    t.TABLE_SCHEMA, t.TABLE_NAME, c.ORDINAL_POSITION;";
 
             using (var connection = new System.Data.SqlClient.SqlConnection(connectionString))
             {
@@ -266,14 +348,23 @@ namespace QuerySight.Extension
                 {
                     using (var reader = command.ExecuteReader())
                     {
+                        TableSchemaInfo currentTable = null;
                         while (reader.Read())
                         {
-                            tables.Add(reader.GetString(0));
+                            string tableName = reader.GetString(0);
+                            string columnName = reader.GetString(1);
+
+                            if (currentTable == null || currentTable.TableName != tableName)
+                            {
+                                currentTable = new TableSchemaInfo { TableName = tableName };
+                                schemaList.Add(currentTable);
+                            }
+                            currentTable.Columns.Add(columnName);
                         }
                     }
                 }
             }
-            return tables;
+            return schemaList;
         }
 
         private static System.Collections.Generic.List<string> GetTableColumns(string connectionString, string fullTableName)
@@ -331,8 +422,8 @@ namespace QuerySight.Extension
                     return;
                 }
 
-                // If in Quick Builder mode and connection has changed, trigger table reload automatically
-                if (_isQuickBuilderMode && connString != _lastLoadedTablesConnection)
+                // Trigger schema reload automatically if the connection changes (updates both Sidebar explorer and Monaco autocompletion)
+                if (connString != _lastLoadedTablesConnection)
                 {
                     TriggerLoadTables();
                 }
@@ -397,10 +488,22 @@ namespace QuerySight.Extension
             }
             else
             {
-                query = txtSqlScript.Text.Trim();
+                if (webViewMonaco.CoreWebView2 == null)
+                {
+                    ShowStatus("Error: Monaco Editor is initializing. Please wait.", false);
+                    return;
+                }
+
+                // Execute script and get query text (returns JSON-serialized string with surrounding double quotes)
+                string rawResult = await webViewMonaco.CoreWebView2.ExecuteScriptAsync("window.getQueryText()");
+                
+                // Parse the JSON string
+                query = Newtonsoft.Json.JsonConvert.DeserializeObject<string>(rawResult);
+                query = query?.Trim();
+
                 if (string.IsNullOrEmpty(query))
                 {
-                    ShowStatus("Error: Please write a SQL query first.", false);
+                    ShowStatus("Error: Please write a SQL query first in the Monaco Editor.", false);
                     return;
                 }
             }
@@ -829,6 +932,11 @@ namespace QuerySight.Extension
                 System.Diagnostics.Debug.WriteLine("Error getting connection info from docView: " + ex.Message);
             }
             return null;
+        }
+        public class TableSchemaInfo
+        {
+            public string TableName { get; set; }
+            public System.Collections.Generic.List<string> Columns { get; set; } = new System.Collections.Generic.List<string>();
         }
     }
 }

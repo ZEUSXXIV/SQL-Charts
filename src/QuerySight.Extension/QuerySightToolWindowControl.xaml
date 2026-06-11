@@ -166,7 +166,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition x:Name="rowSqlPanel" Height="200" MinHeight="100"/>
+            <RowDefinition x:Name="rowSqlPanel" Height="*" MinHeight="100"/>
             <RowDefinition x:Name="rowSplitter" Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
@@ -214,9 +214,9 @@
                 <!-- SQL Editor View -->
                 <Grid x:Name="panelSqlEditor" Grid.Row="1" Visibility="Visible" VerticalAlignment="Stretch">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="200" MinWidth="100" x:Name="colSidebar"/>
+                        <ColumnDefinition Width="0.25*" MinWidth="100" x:Name="colSidebar"/>
                         <ColumnDefinition Width="4"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="0.75*"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Sidebar Schema Explorer -->
@@ -254,127 +254,136 @@
                 </Grid>
 
                 <!-- Quick Builder View -->
-                <Grid x:Name="panelQuickBuilder" Grid.Row="1" Visibility="Collapsed">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+                <ScrollViewer x:Name="panelQuickBuilder" Grid.Row="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="0,0,4,0">
+                        <!-- Source Table and Axes -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <StackPanel Grid.Column="0" Margin="0,0,6,6">
+                                <TextBlock Text="Primary Table / View:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <DockPanel>
+                                    <Button x:Name="btnRefreshSchema" Content="🔄" Click="BtnRefreshSchema_Click" Width="22" Height="22" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Cursor="Hand" DockPanel.Dock="Right" ToolTip="Refresh active database tables"/>
+                                    <ComboBox x:Name="comboTables" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectionChanged="ComboTables_SelectionChanged"/>
+                                </DockPanel>
+                            </StackPanel>
 
-                    <!-- Row 0: Table selection, Join Table, X-Axis, Y-Axis -->
-                    <!-- Table Selection -->
-                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,6,6">
-                        <TextBlock Text="Table / View:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <DockPanel>
-                            <Button x:Name="btnRefreshSchema" Content="🔄" Click="BtnRefreshSchema_Click" Width="22" Height="22" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Cursor="Hand" DockPanel.Dock="Right" ToolTip="Refresh active database tables"/>
-                            <ComboBox x:Name="comboTables" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectionChanged="ComboTables_SelectionChanged"/>
-                        </DockPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,6,6">
+                                <TextBlock Text="Aggregation:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboAggregation" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0" SelectionChanged="ComboAggregation_SelectionChanged">
+                                    <ComboBoxItem Content="None"/>
+                                    <ComboBoxItem Content="SUM"/>
+                                    <ComboBoxItem Content="AVG"/>
+                                    <ComboBoxItem Content="COUNT"/>
+                                    <ComboBoxItem Content="MIN"/>
+                                    <ComboBoxItem Content="MAX"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Margin="0,0,6,6">
+                                <TextBlock Text="Category (X-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboXAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="3" Margin="0,0,0,6">
+                                <TextBlock Text="Value (Y-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboYAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Dynamic Joins Section -->
+                        <Border BorderBrush="#27272A" BorderThickness="0,1,0,1" Padding="0,6" Margin="0,4">
+                            <StackPanel>
+                                <DockPanel LastChildFill="False" Margin="0,0,0,4">
+                                    <TextBlock Text="Active Table Joins" Foreground="#A1A1AA" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    <Button x:Name="btnAddJoin" Content="➕ Add Join" Click="BtnAddJoin_Click" DockPanel.Dock="Right" Padding="6,2" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Cursor="Hand" FontSize="10"/>
+                                </DockPanel>
+                                <StackPanel x:Name="panelJoinsList"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Filters, Limit, Sorting -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <StackPanel Grid.Column="0" Margin="0,0,6,6">
+                                <TextBlock Text="Filter Column:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboFilterColumn" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,6,6">
+                                <TextBlock Text="Operator:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboFilterOperator" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                                    <ComboBoxItem Content="="/>
+                                    <ComboBoxItem Content="&gt;"/>
+                                    <ComboBoxItem Content="&lt;"/>
+                                    <ComboBoxItem Content="LIKE"/>
+                                    <ComboBoxItem Content="IN"/>
+                                    <ComboBoxItem Content="IS NULL"/>
+                                    <ComboBoxItem Content="IS NOT NULL"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2" Margin="0,0,6,6">
+                                <TextBlock Text="Filter Value:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <TextBox x:Name="txtFilterValue" Style="{StaticResource DarkTextBoxStyle}" Height="22"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="3" Margin="0,0,0,6">
+                                <TextBlock Text="Row Limit:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboLimit" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                                    <ComboBoxItem Content="Unlimited"/>
+                                    <ComboBoxItem Content="TOP 10"/>
+                                    <ComboBoxItem Content="TOP 20"/>
+                                    <ComboBoxItem Content="TOP 50"/>
+                                    <ComboBoxItem Content="TOP 100"/>
+                                    <ComboBoxItem Content="TOP 500"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,6,6">
+                                <TextBlock Text="Sort By:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboSortBy" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                                    <ComboBoxItem Content="None"/>
+                                    <ComboBoxItem Content="X-Axis"/>
+                                    <ComboBoxItem Content="Y-Axis"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,6,6">
+                                <TextBlock Text="Sort Direction:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                                <ComboBox x:Name="comboSortDirection" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                                    <ComboBoxItem Content="Ascending"/>
+                                    <ComboBoxItem Content="Descending"/>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <Grid Grid.Column="2" Grid.ColumnSpan="2"/>
+                        </Grid>
+
+                        <!-- Info Label -->
+                        <TextBlock x:Name="txtBuilderInfo" Text="Select a table to begin mapping columns." Foreground="#71717A" FontSize="10" FontWeight="Normal" Margin="0,2,0,0"/>
                     </StackPanel>
-
-                    <!-- Join Table Selection -->
-                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,6,6">
-                        <TextBlock Text="Join Table:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboJoinTable" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectionChanged="ComboJoinTable_SelectionChanged"/>
-                    </StackPanel>
-
-                    <!-- Category (X-Axis) -->
-                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,6,6">
-                        <TextBlock Text="Category (X-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboXAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
-                    </StackPanel>
-
-                    <!-- Value (Y-Axis) -->
-                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="0,0,0,6">
-                        <TextBlock Text="Value (Y-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboYAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
-                    </StackPanel>
-
-                    <!-- Row 1: Filters & Limit -->
-                    <!-- Filter Column -->
-                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,6,6">
-                        <TextBlock Text="Filter Column:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboFilterColumn" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
-                    </StackPanel>
-
-                    <!-- Filter Operator -->
-                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,6,6">
-                        <TextBlock Text="Operator:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboFilterOperator" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
-                            <ComboBoxItem Content="="/>
-                            <ComboBoxItem Content="&gt;"/>
-                            <ComboBoxItem Content="&lt;"/>
-                            <ComboBoxItem Content="LIKE"/>
-                            <ComboBoxItem Content="IN"/>
-                            <ComboBoxItem Content="IS NULL"/>
-                            <ComboBoxItem Content="IS NOT NULL"/>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Filter Value -->
-                    <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,6,6">
-                        <TextBlock Text="Filter Value:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <TextBox x:Name="txtFilterValue" Style="{StaticResource DarkTextBoxStyle}" Height="22"/>
-                    </StackPanel>
-
-                    <!-- Row Limit (TOP N) -->
-                    <StackPanel Grid.Row="1" Grid.Column="3" Margin="0,0,0,6">
-                        <TextBlock Text="Row Limit:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboLimit" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
-                            <ComboBoxItem Content="Unlimited"/>
-                            <ComboBoxItem Content="TOP 10"/>
-                            <ComboBoxItem Content="TOP 20"/>
-                            <ComboBoxItem Content="TOP 50"/>
-                            <ComboBoxItem Content="TOP 100"/>
-                            <ComboBoxItem Content="TOP 500"/>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Row 2: Aggregation & Sorting -->
-                    <!-- Aggregation -->
-                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,6,6">
-                        <TextBlock Text="Aggregation:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboAggregation" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0" SelectionChanged="ComboAggregation_SelectionChanged">
-                            <ComboBoxItem Content="None"/>
-                            <ComboBoxItem Content="SUM"/>
-                            <ComboBoxItem Content="AVG"/>
-                            <ComboBoxItem Content="COUNT"/>
-                            <ComboBoxItem Content="MIN"/>
-                            <ComboBoxItem Content="MAX"/>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Sort By Column -->
-                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,6,6">
-                        <TextBlock Text="Sort By:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboSortBy" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
-                            <ComboBoxItem Content="None"/>
-                            <ComboBoxItem Content="X-Axis"/>
-                            <ComboBoxItem Content="Y-Axis"/>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Sort Direction -->
-                    <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,6,6">
-                        <TextBlock Text="Sort Direction:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboSortDirection" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
-                            <ComboBoxItem Content="Ascending"/>
-                            <ComboBoxItem Content="Descending"/>
-                        </ComboBox>
-                    </StackPanel>
-
-                    <!-- Spacer -->
-                    <Grid Grid.Row="2" Grid.Column="3" Margin="0,0,0,6"/>
-
-                    <!-- Row 3: Info Label -->
-                    <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" x:Name="txtBuilderInfo" Text="Select a table to begin mapping columns." Foreground="#71717A" FontSize="10" FontWeight="Normal" Margin="0,2,0,0"/>
-                </Grid>
+                </ScrollViewer>
             </Grid>
         </Border>
 

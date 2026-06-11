@@ -18,8 +18,11 @@ namespace QuerySight.Extension
         private static string _lastValidDatabaseName;
         private bool _isQuickBuilderMode = false;
         private string _lastLoadedTablesConnection = null;
-        private double _lastSqlPanelHeight = 200;
+        private GridLength _lastSqlPanelHeight = new GridLength(1, GridUnitType.Star);
         private System.Collections.Generic.List<DbRelationshipInfo> _databaseRelationships = new System.Collections.Generic.List<DbRelationshipInfo>();
+        private System.Collections.Generic.List<TableSchemaInfo> _databaseSchema = null;
+        private System.Collections.Generic.List<ActiveJoinRow> _activeJoins = new System.Collections.Generic.List<ActiveJoinRow>();
+        private bool _isRefreshingColumns = false;
 
         public QuerySightToolWindowControl()
         {
@@ -118,7 +121,7 @@ namespace QuerySight.Extension
                 if (gridSplitter != null) gridSplitter.Visibility = Visibility.Collapsed;
                 if (rowSqlPanel != null)
                 {
-                    _lastSqlPanelHeight = rowSqlPanel.Height.Value > 50 ? rowSqlPanel.Height.Value : 200;
+                    _lastSqlPanelHeight = rowSqlPanel.Height;
                     rowSqlPanel.Height = new GridLength(0);
                 }
             }
@@ -128,7 +131,7 @@ namespace QuerySight.Extension
                 if (gridSplitter != null) gridSplitter.Visibility = Visibility.Visible;
                 if (rowSqlPanel != null)
                 {
-                    rowSqlPanel.Height = new GridLength(_lastSqlPanelHeight);
+                    rowSqlPanel.Height = _lastSqlPanelHeight;
                 }
                 UpdateActiveConnectionUI();
                 TriggerLoadTables();
@@ -191,6 +194,9 @@ namespace QuerySight.Extension
                 var schema = await System.Threading.Tasks.Task.Run(() => GetDatabaseSchema(connStr));
                 var relations = await System.Threading.Tasks.Task.Run(() => GetDatabaseRelationships(connStr));
                 _databaseRelationships = relations;
+                _databaseSchema = schema;
+                _activeJoins.Clear();
+                panelJoinsList.Children.Clear();
                 
                 // 1. Populate tables combo
                 comboTables.Items.Clear();
@@ -291,119 +297,273 @@ namespace QuerySight.Extension
 
         private void ComboTables_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            string selectedTable = comboTables.SelectedItem as string;
-            if (string.IsNullOrEmpty(selectedTable)) return;
+            RefreshAllColumns();
+        }
 
-            // 1. Find related tables for the Join dropdown
-            comboJoinTable.SelectionChanged -= ComboJoinTable_SelectionChanged; // Avoid re-triggering during population
-            comboJoinTable.Items.Clear();
-            comboJoinTable.Items.Add("[ No Join ]");
-            comboJoinTable.SelectedIndex = 0;
-
-            var relatedTables = new System.Collections.Generic.HashSet<string>();
-            foreach (var rel in _databaseRelationships)
+        private System.Collections.Generic.List<string> GetCachedTableColumns(string tableName)
+        {
+            if (_databaseSchema == null) return new System.Collections.Generic.List<string>();
+            foreach (var table in _databaseSchema)
             {
-                if (rel.ParentTable == selectedTable)
+                if (table.TableName == tableName)
                 {
-                    relatedTables.Add(rel.ReferencedTable);
+                    return table.Columns;
                 }
-                else if (rel.ReferencedTable == selectedTable)
+            }
+            return new System.Collections.Generic.List<string>();
+        }
+
+        private void UpdateComboBoxItems(ComboBox comboBox, System.Collections.Generic.List<string> newItems, string previousSelection)
+        {
+            bool isIdentical = comboBox.Items.Count == newItems.Count;
+            if (isIdentical)
+            {
+                for (int i = 0; i < newItems.Count; i++)
                 {
-                    relatedTables.Add(rel.ParentTable);
+                    if (comboBox.Items[i].ToString() != newItems[i])
+                    {
+                        isIdentical = false;
+                        break;
+                    }
                 }
             }
 
-            foreach (var t in relatedTables)
+            if (isIdentical)
             {
-                comboJoinTable.Items.Add(t);
+                if (!string.IsNullOrEmpty(previousSelection) && comboBox.SelectedItem?.ToString() != previousSelection)
+                {
+                    comboBox.SelectedItem = previousSelection;
+                }
+                return;
             }
-            comboJoinTable.SelectionChanged += ComboJoinTable_SelectionChanged;
 
-            // 2. Load columns
-            PopulateColumnComboBoxes();
+            comboBox.Items.Clear();
+            foreach (var item in newItems)
+            {
+                comboBox.Items.Add(item);
+            }
+
+            if (!string.IsNullOrEmpty(previousSelection) && newItems.Contains(previousSelection))
+            {
+                comboBox.SelectedItem = previousSelection;
+            }
+            else if (comboBox.Items.Count > 0)
+            {
+                comboBox.SelectedIndex = 0;
+            }
         }
 
-        private void ComboJoinTable_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void RefreshAllColumns()
         {
-            PopulateColumnComboBoxes();
-        }
-
-        private async void PopulateColumnComboBoxes()
-        {
-            string primaryTable = comboTables.SelectedItem as string;
-            if (string.IsNullOrEmpty(primaryTable)) return;
-
-            string joinTable = comboJoinTable.SelectedItem as string;
-            if (joinTable == "[ No Join ]") joinTable = null;
-
-            string connStr = GetActiveConnectionString();
-            if (string.IsNullOrEmpty(connStr)) return;
-
-            txtBuilderInfo.Text = string.IsNullOrEmpty(joinTable)
-                ? $"Loading columns for {primaryTable}..."
-                : $"Loading columns for {primaryTable} and {joinTable}...";
-            txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8)); // Sky Blue
-
-            comboXAxis.IsEnabled = false;
-            comboYAxis.IsEnabled = false;
-            comboFilterColumn.IsEnabled = false;
+            if (_isRefreshingColumns) return;
+            _isRefreshingColumns = true;
 
             try
             {
-                var primaryColumns = await System.Threading.Tasks.Task.Run(() => GetTableColumns(connStr, primaryTable));
-                var joinColumns = !string.IsNullOrEmpty(joinTable) 
-                    ? await System.Threading.Tasks.Task.Run(() => GetTableColumns(connStr, joinTable)) 
-                    : new System.Collections.Generic.List<string>();
-
-                comboXAxis.Items.Clear();
-                comboYAxis.Items.Clear();
-                comboFilterColumn.Items.Clear();
-
-                comboFilterColumn.Items.Add("[ No Filter ]");
-                comboFilterColumn.SelectedIndex = 0;
-
-                string primaryAlias = GetTableAlias(primaryTable);
-
-                // Populate primary table columns
-                foreach (var col in primaryColumns)
+                string primaryTable = comboTables.SelectedItem as string;
+                if (string.IsNullOrEmpty(primaryTable))
                 {
-                    string displayName = !string.IsNullOrEmpty(joinTable) ? $"{primaryAlias}.{col}" : col;
-                    comboXAxis.Items.Add(displayName);
-                    comboYAxis.Items.Add(displayName);
-                    comboFilterColumn.Items.Add(displayName);
+                    comboXAxis.Items.Clear();
+                    comboYAxis.Items.Clear();
+                    comboFilterColumn.Items.Clear();
+                    return;
                 }
 
-                // Populate join table columns
-                if (!string.IsNullOrEmpty(joinTable))
+                string selectedX = comboXAxis.SelectedItem as string;
+                string selectedY = comboYAxis.SelectedItem as string;
+                string selectedFilter = comboFilterColumn.SelectedItem as string;
+
+                var availableTables = new System.Collections.Generic.List<string> { primaryTable };
+
+                for (int i = 0; i < _activeJoins.Count; i++)
                 {
-                    string joinAlias = GetTableAlias(joinTable);
-                    foreach (var col in joinColumns)
+                    var joinRow = _activeJoins[i];
+                    var tempTableSelected = joinRow.ComboJoinTable.SelectedItem as string;
+                    var tempLocalSelected = joinRow.ComboLocalCol.SelectedItem as string;
+                    var tempForeignSelected = joinRow.ComboForeignCol.SelectedItem as string;
+
+                    var localCols = new System.Collections.Generic.List<string>();
+                    foreach (var t in availableTables)
                     {
-                        string displayName = $"{joinAlias}.{col}";
-                        comboXAxis.Items.Add(displayName);
-                        comboYAxis.Items.Add(displayName);
-                        comboFilterColumn.Items.Add(displayName);
+                        string alias = GetTableAlias(t);
+                        var cols = GetCachedTableColumns(t);
+                        foreach (var col in cols)
+                        {
+                            localCols.Add($"{alias}.{col}");
+                        }
+                    }
+
+                    UpdateComboBoxItems(joinRow.ComboLocalCol, localCols, tempLocalSelected);
+
+                    var foreignCols = new System.Collections.Generic.List<string>();
+                    if (!string.IsNullOrEmpty(tempTableSelected))
+                    {
+                        var cols = GetCachedTableColumns(tempTableSelected);
+                        foreach (var col in cols)
+                        {
+                            foreignCols.Add(col);
+                        }
+                    }
+                    UpdateComboBoxItems(joinRow.ComboForeignCol, foreignCols, tempForeignSelected);
+
+                    if (!string.IsNullOrEmpty(tempTableSelected) && !availableTables.Contains(tempTableSelected))
+                    {
+                        availableTables.Add(tempTableSelected);
                     }
                 }
 
-                comboXAxis.IsEnabled = true;
-                comboYAxis.IsEnabled = true;
-                comboFilterColumn.IsEnabled = true;
+                var allCols = new System.Collections.Generic.List<string>();
+                foreach (var t in availableTables)
+                {
+                    string alias = GetTableAlias(t);
+                    var cols = GetCachedTableColumns(t);
+                    foreach (var col in cols)
+                    {
+                        if (availableTables.Count > 1)
+                        {
+                            allCols.Add($"{alias}.{col}");
+                        }
+                        else
+                        {
+                            allCols.Add(col);
+                        }
+                    }
+                }
 
-                if (comboXAxis.Items.Count > 0) comboXAxis.SelectedIndex = 0;
-                if (comboYAxis.Items.Count > 1) comboYAxis.SelectedIndex = 1;
-                else if (comboYAxis.Items.Count > 0) comboYAxis.SelectedIndex = 0;
+                UpdateComboBoxItems(comboXAxis, allCols, selectedX);
+                UpdateComboBoxItems(comboYAxis, allCols, selectedY);
 
-                txtBuilderInfo.Text = string.IsNullOrEmpty(joinTable)
-                    ? $"Mapped {primaryColumns.Count} columns."
-                    : $"Joined and mapped {primaryColumns.Count + joinColumns.Count} columns.";
+                var filterCols = new System.Collections.Generic.List<string> { "[ No Filter ]" };
+                filterCols.AddRange(allCols);
+                UpdateComboBoxItems(comboFilterColumn, filterCols, selectedFilter);
+
+                if (comboXAxis.SelectedIndex == -1 && comboXAxis.Items.Count > 0) comboXAxis.SelectedIndex = 0;
+                if (comboYAxis.SelectedIndex == -1 && comboYAxis.Items.Count > 0)
+                {
+                    if (comboYAxis.Items.Count > 1) comboYAxis.SelectedIndex = 1;
+                    else comboYAxis.SelectedIndex = 0;
+                }
+                if (comboFilterColumn.SelectedIndex == -1 && comboFilterColumn.Items.Count > 0) comboFilterColumn.SelectedIndex = 0;
+
+                int activeJoinsCount = 0;
+                foreach (var r in _activeJoins)
+                {
+                    if (r.ComboJoinTable.SelectedItem != null) activeJoinsCount++;
+                }
+                txtBuilderInfo.Text = activeJoinsCount == 0
+                    ? $"Mapped {allCols.Count} columns."
+                    : $"Joined {activeJoinsCount} tables, mapped {allCols.Count} total columns.";
                 txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green
             }
-            catch (Exception ex)
+            finally
             {
-                txtBuilderInfo.Text = $"Error loading columns: {ex.Message}";
-                txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
+                _isRefreshingColumns = false;
             }
+        }
+
+        private ActiveJoinRow CreateJoinRow()
+        {
+            var row = new ActiveJoinRow();
+
+            var grid = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) }); // Join Table
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) }); // Local Col
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // '='
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) }); // Foreign Col
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                       // Remove btn
+
+            var darkComboBoxStyle = (Style)this.FindResource("DarkComboBoxStyle");
+
+            var comboTable = new ComboBox
+            {
+                Style = darkComboBoxStyle,
+                Height = 22,
+                Margin = new Thickness(0, 0, 4, 0)
+            };
+            foreach (var item in comboTables.Items)
+            {
+                comboTable.Items.Add(item);
+            }
+            Grid.SetColumn(comboTable, 0);
+            grid.Children.Add(comboTable);
+            row.ComboJoinTable = comboTable;
+
+            var comboLocal = new ComboBox
+            {
+                Style = darkComboBoxStyle,
+                Height = 22,
+                Margin = new Thickness(4, 0, 4, 0)
+            };
+            Grid.SetColumn(comboLocal, 1);
+            grid.Children.Add(comboLocal);
+            row.ComboLocalCol = comboLocal;
+
+            var txtEqual = new TextBlock
+            {
+                Text = "=",
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xA1, 0xA1, 0xAA)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 4, 0),
+                FontWeight = FontWeights.Bold
+            };
+            Grid.SetColumn(txtEqual, 2);
+            grid.Children.Add(txtEqual);
+
+            var comboForeign = new ComboBox
+            {
+                Style = darkComboBoxStyle,
+                Height = 22,
+                Margin = new Thickness(4, 0, 4, 0)
+            };
+            Grid.SetColumn(comboForeign, 3);
+            grid.Children.Add(comboForeign);
+            row.ComboForeignCol = comboForeign;
+
+            var btnRemove = new Button
+            {
+                Content = "❌",
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x27, 0x27, 0x2A)),
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE4, 0xE4, 0xE7)),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3F, 0x3F, 0x46)),
+                Padding = new Thickness(6, 2, 6, 2),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                FontSize = 10,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 0)
+            };
+            Grid.SetColumn(btnRemove, 4);
+            grid.Children.Add(btnRemove);
+            row.BtnRemove = btnRemove;
+
+            row.RowGrid = grid;
+
+            comboTable.SelectionChanged += (s, e) => {
+                RefreshAllColumns();
+            };
+
+            comboLocal.SelectionChanged += (s, e) => {
+                RefreshAllColumns();
+            };
+
+            comboForeign.SelectionChanged += (s, e) => {
+                RefreshAllColumns();
+            };
+
+            btnRemove.Click += (s, e) => {
+                panelJoinsList.Children.Remove(grid);
+                _activeJoins.Remove(row);
+                RefreshAllColumns();
+            };
+
+            return row;
+        }
+
+        private void BtnAddJoin_Click(object sender, RoutedEventArgs e)
+        {
+            var newRow = CreateJoinRow();
+            _activeJoins.Add(newRow);
+            panelJoinsList.Children.Add(newRow.RowGrid);
+            RefreshAllColumns();
         }
 
         private static string GetTableAlias(string fullTableName)
@@ -600,8 +760,6 @@ namespace QuerySight.Extension
             if (_isQuickBuilderMode)
             {
                 string table = comboTables.SelectedItem as string;
-                string joinTable = comboJoinTable.SelectedItem as string;
-                if (joinTable == "[ No Join ]") joinTable = null;
 
                 string xAxis = comboXAxis.SelectedItem as string;
                 string yAxis = comboYAxis.SelectedItem as string;
@@ -626,36 +784,6 @@ namespace QuerySight.Extension
                 string primaryTableName = table.Split('.')[1];
                 string primaryAlias = $"[{primaryTableName}]";
 
-                // 2. Resolve join details
-                string joinClause = "";
-                if (!string.IsNullOrEmpty(joinTable))
-                {
-                    DbRelationshipInfo activeRel = null;
-                    foreach (var rel in _databaseRelationships)
-                    {
-                        if ((rel.ParentTable == table && rel.ReferencedTable == joinTable) ||
-                            (rel.ParentTable == joinTable && rel.ReferencedTable == table))
-                        {
-                            activeRel = rel;
-                            break;
-                        }
-                    }
-
-                    if (activeRel != null)
-                    {
-                        string parentSchema = activeRel.ParentTable.Split('.')[0];
-                        string parentTable = activeRel.ParentTable.Split('.')[1];
-                        string refSchema = activeRel.ReferencedTable.Split('.')[0];
-                        string refTable = activeRel.ReferencedTable.Split('.')[1];
-
-                        joinClause = $" INNER JOIN [{refSchema}].[{refTable}] AS [{refTable}] ON [{parentTable}].[{activeRel.ParentColumn}] = [{refTable}].[{activeRel.ReferencedColumn}]";
-                        if (activeRel.ParentTable == joinTable)
-                        {
-                            joinClause =  $" INNER JOIN [{parentSchema}].[{parentTable}] AS [{parentTable}] ON [{refTable}].[{activeRel.ReferencedColumn}] = [{parentTable}].[{activeRel.ParentColumn}]";
-                        }
-                    }
-                }
-
                 // Helper to resolve SQL name formatting
                 Func<string, string> getSqlName = (displayName) =>
                 {
@@ -669,10 +797,37 @@ namespace QuerySight.Extension
                     }
                     else
                     {
-                        if (string.IsNullOrEmpty(joinTable)) return $"[{displayName}]";
+                        if (_activeJoins.Count == 0) return $"[{displayName}]";
                         return $"[{primaryTableName}].[{displayName}]";
                     }
                 };
+
+                // 2. Resolve join details (Multiple Joins)
+                System.Text.StringBuilder joinBuilder = new System.Text.StringBuilder();
+                foreach (var joinRow in _activeJoins)
+                {
+                    string joinTab = joinRow.ComboJoinTable.SelectedItem as string;
+                    string localCol = joinRow.ComboLocalCol.SelectedItem as string;
+                    string foreignCol = joinRow.ComboForeignCol.SelectedItem as string;
+
+                    if (string.IsNullOrEmpty(joinTab) && string.IsNullOrEmpty(localCol) && string.IsNullOrEmpty(foreignCol))
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(joinTab) || string.IsNullOrEmpty(localCol) || string.IsNullOrEmpty(foreignCol))
+                    {
+                        ShowStatus("Error: All joins must have a Table, Local Column, and Foreign Column selected.", false);
+                        return;
+                    }
+
+                    string joinSchema = joinTab.Split('.')[0];
+                    string joinTableName = joinTab.Split('.')[1];
+                    string formattedLocal = getSqlName(localCol);
+
+                    joinBuilder.Append($" INNER JOIN [{joinSchema}].[{joinTableName}] AS [{joinTableName}] ON {formattedLocal} = [{joinTableName}].[{foreignCol}]");
+                }
+                string joinClause = joinBuilder.ToString();
 
                 string cleanX = getSqlName(xAxis);
                 string cleanY = getSqlName(yAxis);
@@ -1205,6 +1360,14 @@ namespace QuerySight.Extension
             public string ParentColumn { get; set; }
             public string ReferencedTable { get; set; }
             public string ReferencedColumn { get; set; }
+        }
+        public class ActiveJoinRow
+        {
+            public Grid RowGrid { get; set; }
+            public ComboBox ComboJoinTable { get; set; }
+            public ComboBox ComboLocalCol { get; set; }
+            public ComboBox ComboForeignCol { get; set; }
+            public Button BtnRemove { get; set; }
         }
     }
 }

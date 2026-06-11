@@ -64,3 +64,24 @@ QuerySight is a high-fidelity SQL visualization and query-assist tool window bui
 ### 🔍 Dataset Filtering (Where Clause)
 * Adds **Filter Column**, **Operator** (`=`, `>`, `<`, `LIKE`, `IN`, `IS NULL`, `IS NOT NULL`), and **Filter Value** text field.
 * Automatically compiles standard `WHERE` filter statements, handles quote escaping, and distinguishes between text and numeric column values dynamically.
+
+---
+
+## 5. Dynamic Manual Joins & Layout Sizing (V1.0.13)
+
+### 🔗 Step-by-Step Manual Joins (Multiple Joins)
+* Replaced the single auto-join dropdown with a dynamic `[+ Add Join]` button.
+* Users can explicitly add multiple sequential joins (e.g. `SalesOrderDetail` joined to `Product`, then `Product` joined to `ProductCategory`).
+* For each join, users select the Join Table, the Local Column (from all tables currently available in the query), and the Foreign Column.
+* Removes joins instantly via a trash/remove (`❌`) button on each row.
+* Compiles multiple sequential `INNER JOIN ... ON ...` statements correctly in the query compiler.
+
+### 📐 50/50 Editor-to-Chart Sizing
+* Modified the default WPF RowDefinitions to divide the tool window height equally (`*` and `*`) between the query editor/builder and the chart canvas, maximizing visibility on startup.
+
+### 🗂️ 25% Schema Explorer Sidebar
+* Scale the TreeView Schema Explorer sidebar to occupy exactly 25% of the editor width (`0.25*` column ratio), leaving 75% for the Monaco editor.
+
+### ⚡ Instant Cached Column Resolver
+* Stores the database schema (tables, views, columns) in an in-memory cache upon connection reload.
+* When selecting tables or adding joins, available columns are populated instantly from cache, avoiding blocking synchronous database queries on the UI thread.

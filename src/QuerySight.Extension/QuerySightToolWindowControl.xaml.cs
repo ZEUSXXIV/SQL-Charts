@@ -19,6 +19,7 @@ namespace QuerySight.Extension
         private bool _isQuickBuilderMode = false;
         private string _lastLoadedTablesConnection = null;
         private double _lastSqlPanelHeight = 200;
+        private System.Collections.Generic.List<DbRelationshipInfo> _databaseRelationships = new System.Collections.Generic.List<DbRelationshipInfo>();
 
         public QuerySightToolWindowControl()
         {
@@ -188,6 +189,8 @@ namespace QuerySight.Extension
             try
             {
                 var schema = await System.Threading.Tasks.Task.Run(() => GetDatabaseSchema(connStr));
+                var relations = await System.Threading.Tasks.Task.Run(() => GetDatabaseRelationships(connStr));
+                _databaseRelationships = relations;
                 
                 // 1. Populate tables combo
                 comboTables.Items.Clear();
@@ -286,40 +289,114 @@ namespace QuerySight.Extension
             TriggerLoadTables();
         }
 
-        private async void ComboTables_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void ComboTables_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             string selectedTable = comboTables.SelectedItem as string;
             if (string.IsNullOrEmpty(selectedTable)) return;
 
+            // 1. Find related tables for the Join dropdown
+            comboJoinTable.SelectionChanged -= ComboJoinTable_SelectionChanged; // Avoid re-triggering during population
+            comboJoinTable.Items.Clear();
+            comboJoinTable.Items.Add("[ No Join ]");
+            comboJoinTable.SelectedIndex = 0;
+
+            var relatedTables = new System.Collections.Generic.HashSet<string>();
+            foreach (var rel in _databaseRelationships)
+            {
+                if (rel.ParentTable == selectedTable)
+                {
+                    relatedTables.Add(rel.ReferencedTable);
+                }
+                else if (rel.ReferencedTable == selectedTable)
+                {
+                    relatedTables.Add(rel.ParentTable);
+                }
+            }
+
+            foreach (var t in relatedTables)
+            {
+                comboJoinTable.Items.Add(t);
+            }
+            comboJoinTable.SelectionChanged += ComboJoinTable_SelectionChanged;
+
+            // 2. Load columns
+            PopulateColumnComboBoxes();
+        }
+
+        private void ComboJoinTable_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            PopulateColumnComboBoxes();
+        }
+
+        private async void PopulateColumnComboBoxes()
+        {
+            string primaryTable = comboTables.SelectedItem as string;
+            if (string.IsNullOrEmpty(primaryTable)) return;
+
+            string joinTable = comboJoinTable.SelectedItem as string;
+            if (joinTable == "[ No Join ]") joinTable = null;
+
             string connStr = GetActiveConnectionString();
             if (string.IsNullOrEmpty(connStr)) return;
 
-            txtBuilderInfo.Text = $"Loading columns for {selectedTable}...";
+            txtBuilderInfo.Text = string.IsNullOrEmpty(joinTable)
+                ? $"Loading columns for {primaryTable}..."
+                : $"Loading columns for {primaryTable} and {joinTable}...";
             txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8)); // Sky Blue
+
             comboXAxis.IsEnabled = false;
             comboYAxis.IsEnabled = false;
+            comboFilterColumn.IsEnabled = false;
 
             try
             {
-                var columns = await System.Threading.Tasks.Task.Run(() => GetTableColumns(connStr, selectedTable));
-                
+                var primaryColumns = await System.Threading.Tasks.Task.Run(() => GetTableColumns(connStr, primaryTable));
+                var joinColumns = !string.IsNullOrEmpty(joinTable) 
+                    ? await System.Threading.Tasks.Task.Run(() => GetTableColumns(connStr, joinTable)) 
+                    : new System.Collections.Generic.List<string>();
+
                 comboXAxis.Items.Clear();
                 comboYAxis.Items.Clear();
+                comboFilterColumn.Items.Clear();
 
-                foreach (var col in columns)
+                comboFilterColumn.Items.Add("[ No Filter ]");
+                comboFilterColumn.SelectedIndex = 0;
+
+                string primaryAlias = GetTableAlias(primaryTable);
+
+                // Populate primary table columns
+                foreach (var col in primaryColumns)
                 {
-                    comboXAxis.Items.Add(col);
-                    comboYAxis.Items.Add(col);
+                    string displayName = !string.IsNullOrEmpty(joinTable) ? $"{primaryAlias}.{col}" : col;
+                    comboXAxis.Items.Add(displayName);
+                    comboYAxis.Items.Add(displayName);
+                    comboFilterColumn.Items.Add(displayName);
+                }
+
+                // Populate join table columns
+                if (!string.IsNullOrEmpty(joinTable))
+                {
+                    string joinAlias = GetTableAlias(joinTable);
+                    foreach (var col in joinColumns)
+                    {
+                        string displayName = $"{joinAlias}.{col}";
+                        comboXAxis.Items.Add(displayName);
+                        comboYAxis.Items.Add(displayName);
+                        comboFilterColumn.Items.Add(displayName);
+                    }
                 }
 
                 comboXAxis.IsEnabled = true;
                 comboYAxis.IsEnabled = true;
+                comboFilterColumn.IsEnabled = true;
 
                 if (comboXAxis.Items.Count > 0) comboXAxis.SelectedIndex = 0;
                 if (comboYAxis.Items.Count > 1) comboYAxis.SelectedIndex = 1;
                 else if (comboYAxis.Items.Count > 0) comboYAxis.SelectedIndex = 0;
 
-                txtBuilderInfo.Text = $"Mapped {columns.Count} columns. Choose Category and Value columns.";
+                txtBuilderInfo.Text = string.IsNullOrEmpty(joinTable)
+                    ? $"Mapped {primaryColumns.Count} columns."
+                    : $"Joined and mapped {primaryColumns.Count + joinColumns.Count} columns.";
                 txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green
             }
             catch (Exception ex)
@@ -327,6 +404,12 @@ namespace QuerySight.Extension
                 txtBuilderInfo.Text = $"Error loading columns: {ex.Message}";
                 txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
             }
+        }
+
+        private static string GetTableAlias(string fullTableName)
+        {
+            int dotIdx = fullTableName.IndexOf('.');
+            return dotIdx >= 0 ? fullTableName.Substring(dotIdx + 1) : fullTableName;
         }
 
         private void BtnRefreshSchema_Click(object sender, RoutedEventArgs e)
@@ -381,6 +464,53 @@ namespace QuerySight.Extension
                 }
             }
             return schemaList;
+        }
+
+        private static System.Collections.Generic.List<DbRelationshipInfo> GetDatabaseRelationships(string connectionString)
+        {
+            var list = new System.Collections.Generic.List<DbRelationshipInfo>();
+            string query = @"
+                SELECT 
+                    sch1.name + '.' + tab1.name AS ParentTable,
+                    col1.name AS ParentColumn,
+                    sch2.name + '.' + tab2.name AS ReferencedTable,
+                    col2.name AS ReferencedColumn
+                FROM 
+                    sys.foreign_key_columns fkc
+                INNER JOIN 
+                    sys.tables tab1 ON tab1.object_id = fkc.parent_object_id
+                INNER JOIN 
+                    sys.schemas sch1 ON tab1.schema_id = sch1.schema_id
+                INNER JOIN 
+                    sys.columns col1 ON col1.object_id = fkc.parent_object_id AND col1.column_id = fkc.parent_column_id
+                INNER JOIN 
+                    sys.tables tab2 ON tab2.object_id = fkc.referenced_object_id
+                INNER JOIN 
+                    sys.schemas sch2 ON tab2.schema_id = sch2.schema_id
+                INNER JOIN 
+                    sys.columns col2 ON col2.object_id = fkc.referenced_object_id AND col2.column_id = fkc.referenced_column_id;";
+
+            using (var connection = new System.Data.SqlClient.SqlConnection(connectionString))
+            {
+                connection.Open();
+                using (var command = new System.Data.SqlClient.SqlCommand(query, connection))
+                {
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            list.Add(new DbRelationshipInfo
+                            {
+                                ParentTable = reader.GetString(0),
+                                ParentColumn = reader.GetString(1),
+                                ReferencedTable = reader.GetString(2),
+                                ReferencedColumn = reader.GetString(3)
+                            });
+                        }
+                    }
+                }
+            }
+            return list;
         }
 
         private static System.Collections.Generic.List<string> GetTableColumns(string connectionString, string fullTableName)
@@ -470,9 +600,20 @@ namespace QuerySight.Extension
             if (_isQuickBuilderMode)
             {
                 string table = comboTables.SelectedItem as string;
+                string joinTable = comboJoinTable.SelectedItem as string;
+                if (joinTable == "[ No Join ]") joinTable = null;
+
                 string xAxis = comboXAxis.SelectedItem as string;
                 string yAxis = comboYAxis.SelectedItem as string;
                 string agg = (comboAggregation.SelectedItem as ComboBoxItem)?.Content as string ?? "None";
+
+                string limitOption = (comboLimit.SelectedItem as ComboBoxItem)?.Content as string ?? "Unlimited";
+                string filterCol = comboFilterColumn.SelectedItem as string;
+                string filterOp = (comboFilterOperator.SelectedItem as ComboBoxItem)?.Content as string ?? "=";
+                string filterVal = txtFilterValue.Text.Trim();
+
+                string sortBy = (comboSortBy.SelectedItem as ComboBoxItem)?.Content as string ?? "None";
+                string sortDir = (comboSortDirection.SelectedItem as ComboBoxItem)?.Content as string ?? "Ascending";
 
                 if (string.IsNullOrEmpty(table) || string.IsNullOrEmpty(xAxis) || string.IsNullOrEmpty(yAxis))
                 {
@@ -480,26 +621,130 @@ namespace QuerySight.Extension
                     return;
                 }
 
-                // Build query dynamically
-                string cleanTable = string.Join(".", System.Array.ConvertAll(table.Split('.'), t => "[" + t.Trim('[', ']') + "]"));
-                string cleanX = "[" + xAxis.Trim('[', ']') + "]";
-                string cleanY = "[" + yAxis.Trim('[', ']') + "]";
+                // 1. Resolve tables and aliases
+                string primarySchema = table.Split('.')[0];
+                string primaryTableName = table.Split('.')[1];
+                string primaryAlias = $"[{primaryTableName}]";
 
+                // 2. Resolve join details
+                string joinClause = "";
+                if (!string.IsNullOrEmpty(joinTable))
+                {
+                    DbRelationshipInfo activeRel = null;
+                    foreach (var rel in _databaseRelationships)
+                    {
+                        if ((rel.ParentTable == table && rel.ReferencedTable == joinTable) ||
+                            (rel.ParentTable == joinTable && rel.ReferencedTable == table))
+                        {
+                            activeRel = rel;
+                            break;
+                        }
+                    }
+
+                    if (activeRel != null)
+                    {
+                        string parentSchema = activeRel.ParentTable.Split('.')[0];
+                        string parentTable = activeRel.ParentTable.Split('.')[1];
+                        string refSchema = activeRel.ReferencedTable.Split('.')[0];
+                        string refTable = activeRel.ReferencedTable.Split('.')[1];
+
+                        joinClause = $" INNER JOIN [{refSchema}].[{refTable}] AS [{refTable}] ON [{parentTable}].[{activeRel.ParentColumn}] = [{refTable}].[{activeRel.ReferencedColumn}]";
+                        if (activeRel.ParentTable == joinTable)
+                        {
+                            joinClause =  $" INNER JOIN [{parentSchema}].[{parentTable}] AS [{parentTable}] ON [{refTable}].[{activeRel.ReferencedColumn}] = [{parentTable}].[{activeRel.ParentColumn}]";
+                        }
+                    }
+                }
+
+                // Helper to resolve SQL name formatting
+                Func<string, string> getSqlName = (displayName) =>
+                {
+                    if (string.IsNullOrEmpty(displayName)) return "";
+                    int dotIdx = displayName.IndexOf('.');
+                    if (dotIdx > 0)
+                    {
+                        string alias = displayName.Substring(0, dotIdx);
+                        string col = displayName.Substring(dotIdx + 1);
+                        return $"[{alias}].[{col}]";
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(joinTable)) return $"[{displayName}]";
+                        return $"[{primaryTableName}].[{displayName}]";
+                    }
+                };
+
+                string cleanX = getSqlName(xAxis);
+                string cleanY = getSqlName(yAxis);
+
+                // 3. Resolve TOP limit
+                string limitStr = "";
+                if (limitOption != "Unlimited" && !string.IsNullOrEmpty(limitOption))
+                {
+                    limitStr = $"{limitOption} "; // e.g. "TOP 10 "
+                }
+
+                // 4. Resolve WHERE filter clause
+                string whereClause = "";
+                if (filterCol != "[ No Filter ]" && !string.IsNullOrEmpty(filterCol))
+                {
+                    string sqlFilterCol = getSqlName(filterCol);
+                    if (filterOp == "LIKE")
+                    {
+                        whereClause = $" WHERE {sqlFilterCol} LIKE '%{filterVal.Replace("'", "''")}%'";
+                    }
+                    else if (filterOp == "IS NULL" || filterOp == "IS NOT NULL")
+                    {
+                        whereClause = $" WHERE {sqlFilterCol} {filterOp}";
+                    }
+                    else if (filterOp == "IN")
+                    {
+                        whereClause = $" WHERE {sqlFilterCol} IN ({filterVal})";
+                    }
+                    else
+                    {
+                        double num;
+                        bool isNumeric = double.TryParse(filterVal, out num);
+                        if (isNumeric)
+                        {
+                            whereClause = $" WHERE {sqlFilterCol} {filterOp} {filterVal}";
+                        }
+                        else
+                        {
+                            whereClause = $" WHERE {sqlFilterCol} {filterOp} '{filterVal.Replace("'", "''")}'";
+                        }
+                    }
+                }
+
+                // 5. Resolve ORDER BY clause
+                string orderClause = "";
+                if (sortBy == "X-Axis")
+                {
+                    orderClause = $" ORDER BY {cleanX} {(sortDir == "Descending" ? "DESC" : "ASC")}";
+                }
+                else if (sortBy == "Y-Axis")
+                {
+                    string sortExpr = (agg == "None") ? cleanY : $"{agg}({cleanY})";
+                    orderClause = $" ORDER BY {sortExpr} {(sortDir == "Descending" ? "DESC" : "ASC")}";
+                }
+
+                // 6. Assemble complete SQL query
                 if (agg == "None")
                 {
-                    query = $"SELECT {cleanX}, {cleanY} FROM {cleanTable};";
+                    query = $"SELECT {limitStr}{cleanX}, {cleanY} FROM [{primarySchema}].[{primaryTableName}] AS {primaryAlias}{joinClause}{whereClause}{orderClause};";
                 }
                 else
                 {
                     string aliasY = "";
-                    if (agg == "SUM") aliasY = $"[Total {yAxis.Trim('[', ']')}]";
-                    else if (agg == "AVG") aliasY = $"[Average {yAxis.Trim('[', ']')}]";
-                    else if (agg == "COUNT") aliasY = $"[Count of {yAxis.Trim('[', ']')}]";
-                    else if (agg == "MIN") aliasY = $"[Min {yAxis.Trim('[', ']')}]";
-                    else if (agg == "MAX") aliasY = $"[Max {yAxis.Trim('[', ']')}]";
-                    else aliasY = $"[{agg} of {yAxis.Trim('[', ']')}]";
+                    string cleanYName = yAxis.Contains(".") ? yAxis.Substring(yAxis.IndexOf('.') + 1) : yAxis;
+                    if (agg == "SUM") aliasY = $"[Total {cleanYName}]";
+                    else if (agg == "AVG") aliasY = $"[Average {cleanYName}]";
+                    else if (agg == "COUNT") aliasY = $"[Count of {cleanYName}]";
+                    else if (agg == "MIN") aliasY = $"[Min {cleanYName}]";
+                    else if (agg == "MAX") aliasY = $"[Max {cleanYName}]";
+                    else aliasY = $"[{agg} of {cleanYName}]";
 
-                    query = $"SELECT {cleanX}, {agg}({cleanY}) AS {aliasY} FROM {cleanTable} GROUP BY {cleanX};";
+                    query = $"SELECT {limitStr}{cleanX}, {agg}({cleanY}) AS {aliasY} FROM [{primarySchema}].[{primaryTableName}] AS {primaryAlias}{joinClause}{whereClause} GROUP BY {cleanX}{orderClause};";
                 }
             }
             else
@@ -953,6 +1198,13 @@ namespace QuerySight.Extension
         {
             public string TableName { get; set; }
             public System.Collections.Generic.List<string> Columns { get; set; } = new System.Collections.Generic.List<string>();
+        }
+        public class DbRelationshipInfo
+        {
+            public string ParentTable { get; set; }
+            public string ParentColumn { get; set; }
+            public string ReferencedTable { get; set; }
+            public string ReferencedColumn { get; set; }
         }
     }
 }

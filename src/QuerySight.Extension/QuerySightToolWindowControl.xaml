@@ -129,6 +129,38 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Dark Premium Style for TextBox -->
+        <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="#1E1E1F"/>
+            <Setter Property="Foreground" Value="#E4E4E7"/>
+            <Setter Property="BorderBrush" Value="#3F3F46"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Name="Border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ScrollViewer Name="PART_ContentHost" Margin="0" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#7C3AED" />
+                            </Trigger>
+                            <Trigger Property="IsFocused" Value="true">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#7C3AED" />
+                                <Setter TargetName="Border" Property="Background" Value="#101010" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -226,14 +258,17 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2*"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="1.5*"/>
-                        <ColumnDefinition Width="1.5*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
+                    <!-- Row 0: Table selection, Join Table, X-Axis, Y-Axis -->
                     <!-- Table Selection -->
                     <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,6,6">
                         <TextBlock Text="Table / View:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
@@ -243,8 +278,67 @@
                         </DockPanel>
                     </StackPanel>
 
-                    <!-- Aggregation -->
+                    <!-- Join Table Selection -->
                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,6,6">
+                        <TextBlock Text="Join Table:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboJoinTable" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectionChanged="ComboJoinTable_SelectionChanged"/>
+                    </StackPanel>
+
+                    <!-- Category (X-Axis) -->
+                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,6,6">
+                        <TextBlock Text="Category (X-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboXAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                    </StackPanel>
+
+                    <!-- Value (Y-Axis) -->
+                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="0,0,0,6">
+                        <TextBlock Text="Value (Y-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboYAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                    </StackPanel>
+
+                    <!-- Row 1: Filters & Limit -->
+                    <!-- Filter Column -->
+                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,6,6">
+                        <TextBlock Text="Filter Column:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboFilterColumn" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                    </StackPanel>
+
+                    <!-- Filter Operator -->
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,6,6">
+                        <TextBlock Text="Operator:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboFilterOperator" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                            <ComboBoxItem Content="="/>
+                            <ComboBoxItem Content="&gt;"/>
+                            <ComboBoxItem Content="&lt;"/>
+                            <ComboBoxItem Content="LIKE"/>
+                            <ComboBoxItem Content="IN"/>
+                            <ComboBoxItem Content="IS NULL"/>
+                            <ComboBoxItem Content="IS NOT NULL"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- Filter Value -->
+                    <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,6,6">
+                        <TextBlock Text="Filter Value:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <TextBox x:Name="txtFilterValue" Style="{StaticResource DarkTextBoxStyle}" Height="22"/>
+                    </StackPanel>
+
+                    <!-- Row Limit (TOP N) -->
+                    <StackPanel Grid.Row="1" Grid.Column="3" Margin="0,0,0,6">
+                        <TextBlock Text="Row Limit:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboLimit" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                            <ComboBoxItem Content="Unlimited"/>
+                            <ComboBoxItem Content="TOP 10"/>
+                            <ComboBoxItem Content="TOP 20"/>
+                            <ComboBoxItem Content="TOP 50"/>
+                            <ComboBoxItem Content="TOP 100"/>
+                            <ComboBoxItem Content="TOP 500"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- Row 2: Aggregation & Sorting -->
+                    <!-- Aggregation -->
+                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,6,6">
                         <TextBlock Text="Aggregation:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
                         <ComboBox x:Name="comboAggregation" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0" SelectionChanged="ComboAggregation_SelectionChanged">
                             <ComboBoxItem Content="None"/>
@@ -256,19 +350,30 @@
                         </ComboBox>
                     </StackPanel>
 
-                    <!-- X-Axis Column -->
-                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,6,6">
-                        <TextBlock Text="Category (X-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboXAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                    <!-- Sort By Column -->
+                    <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,0,6,6">
+                        <TextBlock Text="Sort By:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboSortBy" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                            <ComboBoxItem Content="None"/>
+                            <ComboBoxItem Content="X-Axis"/>
+                            <ComboBoxItem Content="Y-Axis"/>
+                        </ComboBox>
                     </StackPanel>
 
-                    <!-- Y-Axis Column -->
-                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="0,0,0,6">
-                        <TextBlock Text="Value (Y-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboYAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
+                    <!-- Sort Direction -->
+                    <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,6,6">
+                        <TextBlock Text="Sort Direction:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboSortDirection" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0">
+                            <ComboBoxItem Content="Ascending"/>
+                            <ComboBoxItem Content="Descending"/>
+                        </ComboBox>
                     </StackPanel>
-                    
-                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" x:Name="txtBuilderInfo" Text="Select a table to begin mapping columns." Foreground="#71717A" FontSize="10" FontWeight="Normal" Margin="0,2,0,0"/>
+
+                    <!-- Spacer -->
+                    <Grid Grid.Row="2" Grid.Column="3" Margin="0,0,0,6"/>
+
+                    <!-- Row 3: Info Label -->
+                    <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" x:Name="txtBuilderInfo" Text="Select a table to begin mapping columns." Foreground="#71717A" FontSize="10" FontWeight="Normal" Margin="0,2,0,0"/>
                 </Grid>
             </Grid>
         </Border>

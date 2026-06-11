@@ -7,6 +7,130 @@
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="800"
              Background="#1E1E1E">
+    <UserControl.Resources>
+        <!-- Dark Premium Style for ComboBoxItem -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="SnapsToDevicePixels" Value="true"/>
+            <Setter Property="OverridesDefaultStyle" Value="true"/>
+            <Setter Property="Foreground" Value="#E4E4E7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border Name="Border"
+                                Padding="8,4"
+                                Background="Transparent"
+                                CornerRadius="2"
+                                Margin="2,1">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="true">
+                                <Setter TargetName="Border" Property="Background" Value="#7C3AED" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="true">
+                                <Setter TargetName="Border" Property="Background" Value="#4C1D95" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Dark Premium Style for ComboBox -->
+        <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="SnapsToDevicePixels" Value="true"/>
+            <Setter Property="OverridesDefaultStyle" Value="true"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="ScrollViewer.CanContentScroll" Value="true"/>
+            <Setter Property="Foreground" Value="#E4E4E7"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Name="ToggleButton" 
+                                          ClickMode="Press" 
+                                          Focusable="false"
+                                          IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Name="Border" 
+                                                Background="#1E1E1F" 
+                                                BorderBrush="#3F3F46" 
+                                                BorderThickness="1" 
+                                                CornerRadius="4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition />
+                                                    <ColumnDefinition Width="24" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="1" BorderBrush="#3F3F46" BorderThickness="1,0,0,0" Margin="0,2"/>
+                                                <Path Name="Arrow" 
+                                                      Grid.Column="1" 
+                                                      Fill="#A1A1AA" 
+                                                      HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"
+                                                      Data="M 0 0 L 4 4 L 8 0 Z"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="true">
+                                                <Setter TargetName="Border" Property="Background" Value="#2D2D30" />
+                                                <Setter TargetName="Border" Property="BorderBrush" Value="#7C3AED" />
+                                                <Setter TargetName="Arrow" Property="Fill" Value="White" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="true">
+                                                <Setter TargetName="Border" Property="Background" Value="#101010" />
+                                                <Setter TargetName="Border" Property="BorderBrush" Value="#7C3AED" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter Name="ContentSite"
+                                              IsHitTestVisible="False" 
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                              Margin="8,3,28,3"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Left" />
+
+                            <Popup Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="true" 
+                                   Focusable="false"
+                                   PopupAnimation="Slide">
+                                <Grid Name="DropDown"
+                                      SnapsToDevicePixels="true"
+                                      MinWidth="{TemplateBinding ActualWidth}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border Name="DropDownBorder"
+                                            Background="#1E1E1F"
+                                            BorderBrush="#3F3F46"
+                                            BorderThickness="1"
+                                            CornerRadius="4"
+                                            Margin="0,2,0,4">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="Black" BlurRadius="6" ShadowDepth="2" Opacity="0.4"/>
+                                        </Border.Effect>
+                                    </Border>
+                                    <ScrollViewer Margin="2,6,2,8" SnapsToDevicePixels="true">
+                                        <StackPanel IsItemsHost="true" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -21,7 +145,7 @@
                         Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Padding="8,4" Margin="0,0,8,0" Cursor="Hand"/>
                 
                 <TextBlock Text="Chart:" VerticalAlignment="Center" Foreground="#A1A1AA" Margin="0,0,4,0"/>
-                <ComboBox x:Name="comboChartType" Width="90" SelectedIndex="0" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Padding="4" Margin="0,0,8,0">
+                <ComboBox x:Name="comboChartType" Style="{StaticResource DarkComboBoxStyle}" Width="90" SelectedIndex="0" Margin="0,0,8,0">
                     <ComboBoxItem Content="bar"/>
                     <ComboBoxItem Content="line"/>
                     <ComboBoxItem Content="pie"/>
@@ -78,14 +202,14 @@
                         <TextBlock Text="Table / View:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
                         <DockPanel>
                             <Button x:Name="btnRefreshSchema" Content="🔄" Click="BtnRefreshSchema_Click" Width="22" Height="22" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Cursor="Hand" DockPanel.Dock="Right" ToolTip="Refresh active database tables"/>
-                            <ComboBox x:Name="comboTables" Height="22" SelectionChanged="ComboTables_SelectionChanged" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4"/>
+                            <ComboBox x:Name="comboTables" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectionChanged="ComboTables_SelectionChanged"/>
                         </DockPanel>
                     </StackPanel>
 
                     <!-- Aggregation -->
                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,6,6">
                         <TextBlock Text="Aggregation:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboAggregation" Height="22" SelectedIndex="0" SelectionChanged="ComboAggregation_SelectionChanged" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4">
+                        <ComboBox x:Name="comboAggregation" Style="{StaticResource DarkComboBoxStyle}" Height="22" SelectedIndex="0" SelectionChanged="ComboAggregation_SelectionChanged">
                             <ComboBoxItem Content="None"/>
                             <ComboBoxItem Content="SUM"/>
                             <ComboBoxItem Content="AVG"/>
@@ -98,13 +222,13 @@
                     <!-- X-Axis Column -->
                     <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,6,6">
                         <TextBlock Text="Category (X-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboXAxis" Height="22" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4"/>
+                        <ComboBox x:Name="comboXAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
                     </StackPanel>
 
                     <!-- Y-Axis Column -->
                     <StackPanel Grid.Row="0" Grid.Column="3" Margin="0,0,0,6">
                         <TextBlock Text="Value (Y-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
-                        <ComboBox x:Name="comboYAxis" Height="22" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4"/>
+                        <ComboBox x:Name="comboYAxis" Style="{StaticResource DarkComboBoxStyle}" Height="22"/>
                     </StackPanel>
                     
                     <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" x:Name="txtBuilderInfo" Text="Select a table to begin mapping columns." Foreground="#71717A" FontSize="10" FontWeight="Normal" Margin="0,2,0,0"/>

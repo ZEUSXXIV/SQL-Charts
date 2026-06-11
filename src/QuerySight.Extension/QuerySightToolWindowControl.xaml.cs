@@ -14,6 +14,8 @@ namespace QuerySight.Extension
     {
         private bool _isInitialized = false;
         private System.Windows.Threading.DispatcherTimer _connTimer;
+        private static string _lastValidConnectionString;
+        private static string _lastValidDatabaseName;
 
         public QuerySightToolWindowControl()
         {
@@ -254,24 +256,39 @@ namespace QuerySight.Extension
         private static string GetActiveConnectionString()
         {
             object connectionInfo = GetActiveConnectionInfo();
-            if (connectionInfo == null) return null;
+            if (connectionInfo == null)
+            {
+                return _lastValidConnectionString;
+            }
 
             try
             {
-                // Get UIConnectionInfo property
+                // connectionInfo could be UIConnectionInfo itself, or a wrapper object containing UIConnectionInfo
+                object uiConn = null;
                 var uiConnProp = connectionInfo.GetType().GetProperty("UIConnectionInfo", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                if (uiConnProp == null) return null;
+                if (uiConnProp != null)
+                {
+                    uiConn = uiConnProp.GetValue(connectionInfo);
+                }
+                else
+                {
+                    // Check if connectionInfo itself has ServerName property (meaning it is likely UIConnectionInfo)
+                    var serverNameProp = connectionInfo.GetType().GetProperty("ServerName", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (serverNameProp != null)
+                    {
+                        uiConn = connectionInfo;
+                    }
+                }
 
-                object uiConn = uiConnProp.GetValue(connectionInfo);
-                if (uiConn == null) return null;
+                if (uiConn == null) return _lastValidConnectionString;
 
-                // Get properties
-                var serverNameProp = uiConn.GetType().GetProperty("ServerName", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                // Get properties from uiConn
+                var serverNameProp2 = uiConn.GetType().GetProperty("ServerName", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 var userNameProp = uiConn.GetType().GetProperty("UserName", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 var useIntegratedSecurityProp = uiConn.GetType().GetProperty("UseIntegratedSecurity", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 var passwordProp = uiConn.GetType().GetProperty("Password", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
 
-                string serverName = serverNameProp?.GetValue(uiConn) as string;
+                string serverName = serverNameProp2?.GetValue(uiConn) as string;
                 string userName = userNameProp?.GetValue(uiConn) as string;
                 bool useIntegratedSecurity = (bool)(useIntegratedSecurityProp?.GetValue(uiConn) ?? true);
                 string password = passwordProp?.GetValue(uiConn) as string;
@@ -293,6 +310,12 @@ namespace QuerySight.Extension
                 if (!string.IsNullOrEmpty(activeEditorDb))
                 {
                     databaseName = activeEditorDb;
+                    _lastValidDatabaseName = activeEditorDb;
+                }
+                else if (!string.IsNullOrEmpty(_lastValidDatabaseName))
+                {
+                    // Fall back to the last known database name
+                    databaseName = _lastValidDatabaseName;
                 }
 
                 var builder = new System.Data.SqlClient.SqlConnectionStringBuilder();
@@ -312,13 +335,19 @@ namespace QuerySight.Extension
                     builder.InitialCatalog = databaseName;
                 }
 
-                return builder.ConnectionString;
+                string connStr = builder.ConnectionString;
+                if (!string.IsNullOrEmpty(connStr))
+                {
+                    _lastValidConnectionString = connStr;
+                }
+
+                return connStr;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Error building connection string: " + ex.Message);
             }
-            return null;
+            return _lastValidConnectionString;
         }
 
         private static string GetActiveEditorDatabaseName()
@@ -352,7 +381,8 @@ namespace QuerySight.Extension
                                         
                                     if (getDocViewMethod != null)
                                     {
-                                        object docView = getDocViewMethod.Invoke(scriptFactory, new object[] { vsMonitorSelection, false, null });
+                                        // Pass true for logicalActive so it returns the active script editor even when the tool window is focused
+                                        object docView = getDocViewMethod.Invoke(scriptFactory, new object[] { vsMonitorSelection, true, null });
                                         if (docView != null)
                                         {
                                             var currentDbProp = GetPropertyAnywhere(
@@ -466,15 +496,43 @@ namespace QuerySight.Extension
                         if (serviceCacheType != null)
                         {
                             var scriptFactoryProperty = serviceCacheType.GetProperty("ScriptFactory", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                            if (scriptFactoryProperty != null)
+                            var vsMonitorSelectionProperty = serviceCacheType.GetProperty("VSMonitorSelection", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                            
+                            if (scriptFactoryProperty != null && vsMonitorSelectionProperty != null)
                             {
-                                var scriptFactory = scriptFactoryProperty.GetValue(null);
-                                if (scriptFactory != null)
+                                object scriptFactory = scriptFactoryProperty.GetValue(null);
+                                object vsMonitorSelection = vsMonitorSelectionProperty.GetValue(null);
+                                
+                                if (scriptFactory != null && vsMonitorSelection != null)
                                 {
+                                    // 1. Try to get docView of the active editor window (passing true to search logically active)
+                                    var getDocViewMethod = GetMethodAnywhere(
+                                        scriptFactory.GetType(), 
+                                        "GetCurrentlyActiveFrameDocView", 
+                                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                                        
+                                    if (getDocViewMethod != null)
+                                    {
+                                        object docView = getDocViewMethod.Invoke(scriptFactory, new object[] { vsMonitorSelection, true, null });
+                                        if (docView != null)
+                                        {
+                                            object connInfo = GetConnectionInfoFromDocView(docView);
+                                            if (connInfo != null)
+                                            {
+                                                return connInfo;
+                                            }
+                                        }
+                                    }
+
+                                    // 2. Fallback to CurrentlyActiveWndConnectionInfo
                                     var connInfoProperty = scriptFactory.GetType().GetProperty("CurrentlyActiveWndConnectionInfo", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                                     if (connInfoProperty != null)
                                     {
-                                        return connInfoProperty.GetValue(scriptFactory);
+                                        object connInfo = connInfoProperty.GetValue(scriptFactory);
+                                        if (connInfo != null)
+                                        {
+                                            return connInfo;
+                                        }
                                     }
                                 }
                             }
@@ -485,6 +543,40 @@ namespace QuerySight.Extension
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("Error getting active connection via reflection: " + ex.Message);
+            }
+            return null;
+        }
+
+        private static object GetConnectionInfoFromDocView(object docView)
+        {
+            if (docView == null) return null;
+            try
+            {
+                var connInfoProp = GetPropertyAnywhere(docView.GetType(), "ConnectionInfo", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                if (connInfoProp != null)
+                {
+                    object connInfoObj = connInfoProp.GetValue(docView);
+                    if (connInfoObj != null)
+                    {
+                        // Check if it has UIConnectionInfo property
+                        var uiConnProp = GetPropertyAnywhere(connInfoObj.GetType(), "UIConnectionInfo", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (uiConnProp != null)
+                        {
+                            return uiConnProp.GetValue(connInfoObj);
+                        }
+                        
+                        // If not, maybe the object itself is UIConnectionInfo or has ServerName
+                        var serverNameProp = GetPropertyAnywhere(connInfoObj.GetType(), "ServerName", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (serverNameProp != null)
+                        {
+                            return connInfoObj;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Error getting connection info from docView: " + ex.Message);
             }
             return null;
         }

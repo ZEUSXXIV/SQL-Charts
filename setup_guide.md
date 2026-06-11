@@ -32,7 +32,7 @@ Because SSMS 22 uses the isolated Visual Studio 2022 Shell, standard double-clic
 1. Close any running instances of SSMS.
 2. Open **PowerShell** and run the VSIXInstaller pointing to the compiled package:
    ```powershell
-   Start-Process -FilePath "C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\VSIXInstaller.exe" -ArgumentList "/q", '"C:\Users\Naveen\Documents\projects\sentencepiece\SQL Charts\src\QuerySight.Extension\bin\Release\QuerySight.Extension.vsix"' -Wait
+   Start-Process -FilePath "C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\VSIXInstaller.exe" -ArgumentList "/q", '"C:\<Path-To-Your-Clone>\SQL-Charts\src\QuerySight.Extension\bin\Release\QuerySight.Extension.vsix"' -Wait
    ```
 3. Update the SSMS package configuration cache for the registration to take effect:
    ```powershell
@@ -55,7 +55,7 @@ pip install mcp websockets
 
 ### 2. Locate the Server Script
 The Python script is located at:
-`C:\Users\Naveen\Documents\projects\sentencepiece\SQL Charts\src\QuerySight.McpServer\mcp_server.py`
+`C:\<Path-To-Your-Clone>\SQL-Charts\src\QuerySight.McpServer\mcp_server.py`
 
 ---
 
@@ -64,7 +64,7 @@ The Python script is located at:
 To enable GitHub Copilot Chat inside SSMS to communicate with the QuerySight MCP tool, you must configure two files: the user `.mcp.json` file and the SSMS `settings.json` file.
 
 ### 1. Configure the `.mcp.json` File
-Create or modify the file at `C:\Users\Naveen\.mcp.json` with the following configuration (replace the script path if yours differs):
+Create or modify the file at `C:\Users\<Your-Username>\.mcp.json` with the following configuration (replace the script path with the absolute path of your local clone):
 
 ```json
 {
@@ -74,7 +74,7 @@ Create or modify the file at `C:\Users\Naveen\.mcp.json` with the following conf
       "type": "stdio",
       "command": "python",
       "args": [
-        "C:\\Users\\Naveen\\Documents\\projects\\sentencepiece\\SQL Charts\\src\\QuerySight.McpServer\\mcp_server.py"
+        "C:\\<Path-To-Your-Clone>\\SQL-Charts\\src\\QuerySight.McpServer\\mcp_server.py"
       ],
       "env": {}
     }
@@ -86,11 +86,11 @@ Create or modify the file at `C:\Users\Naveen\.mcp.json` with the following conf
 To register the server and allow the `render_ssms_chart` tool to run inside the Copilot Chat panel, you must update the SSMS Unified Settings file.
 
 1. Open the settings file in a text editor:
-   `C:\Users\Naveen\AppData\Local\Microsoft\SSMS\22.0_a53a4edb\settings.json`
-2. Add/merge the following keys into the JSON configuration:
+   `C:\Users\<Your-Username>\AppData\Local\Microsoft\SSMS\22.0_a53a4edb\settings.json`
+2. Add/merge the following keys into the JSON configuration (replacing the path to your `.mcp.json` file accordingly):
    ```json
    {
-     "copilot.featureFlags.chatUI.enabledMcpServers": "sql-tools::C:\\Program Files\\Microsoft SQL Server Management Studio 22\\Release\\Common7\\IDE\\Extensions\\Microsoft\\SSMS.CopilotUiTools\\McpServer\\mcp.json,QuerySight::C:\\Users\\Naveen\\.mcp.json",
+     "copilot.featureFlags.chatUI.enabledMcpServers": "sql-tools::C:\\Program Files\\Microsoft SQL Server Management Studio 22\\Release\\Common7\\IDE\\Extensions\\Microsoft\\SSMS.CopilotUiTools\\McpServer\\mcp.json,QuerySight::C:\\Users\\<Your-Username>\\.mcp.json",
      "copilot.featureFlags.chatUI.enabledTools": "QuerySight_render_ssms_chart"
    }
    ```

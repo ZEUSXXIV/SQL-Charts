@@ -13,11 +13,18 @@ namespace QuerySight.Extension
     public partial class QuerySightToolWindowControl : UserControl
     {
         private bool _isInitialized = false;
+        private System.Windows.Threading.DispatcherTimer _connTimer;
 
         public QuerySightToolWindowControl()
         {
             InitializeComponent();
             this.Loaded += OnLoaded;
+
+            // Initialize connection string poller to display the active connection info
+            _connTimer = new System.Windows.Threading.DispatcherTimer();
+            _connTimer.Interval = TimeSpan.FromSeconds(1.5);
+            _connTimer.Tick += ConnTimer_Tick;
+            _connTimer.Start();
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -94,6 +101,47 @@ namespace QuerySight.Extension
         private void BtnToggleSql_Click(object sender, RoutedEventArgs e)
         {
             sqlPanel.Visibility = sqlPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            if (sqlPanel.Visibility == Visibility.Visible)
+            {
+                UpdateActiveConnectionUI();
+            }
+        }
+
+        private void ConnTimer_Tick(object sender, EventArgs e)
+        {
+            UpdateActiveConnectionUI();
+        }
+
+        private void UpdateActiveConnectionUI()
+        {
+            try
+            {
+                string connString = GetActiveConnectionString();
+                if (string.IsNullOrEmpty(connString))
+                {
+                    txtConnectionInfo.Text = "Connection: None (Open query tab)";
+                    txtConnectionInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
+                    return;
+                }
+
+                var builder = new System.Data.SqlClient.SqlConnectionStringBuilder(connString);
+                string server = builder.DataSource;
+                string db = builder.InitialCatalog;
+
+                if (string.IsNullOrEmpty(db)) db = "master";
+
+                // Truncate display to look clean in toolbar
+                if (server.Length > 20) server = server.Substring(0, 17) + "...";
+                if (db.Length > 20) db = db.Substring(0, 17) + "...";
+
+                txtConnectionInfo.Text = $"Connection: {server} | {db}";
+                txtConnectionInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8)); // Sky Blue
+            }
+            catch
+            {
+                txtConnectionInfo.Text = "Connection: Error";
+                txtConnectionInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
+            }
         }
 
         private async void BtnRunChart_Click(object sender, RoutedEventArgs e)

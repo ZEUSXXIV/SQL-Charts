@@ -1,30 +1,35 @@
 import json
 import asyncio
 import websockets
+from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 # Initialize the FastMCP server for QuerySight
 mcp = FastMCP("QuerySight")
 
 @mcp.tool()
-async def render_ssms_chart(chart_type: str, title: str, query_data_json: str) -> str:
+async def render_ssms_chart(chart_type: str, title: str, query_data_json: Any) -> str:
     """
     Pushes query results from the SSMS GitHub Copilot Agent to the SSMS QuerySight tool window.
     
     Parameters:
     - chart_type: The type of chart to display ('bar', 'line', 'pie').
     - title: The title/header of the chart (e.g. 'Monthly Revenue 2025').
-    - query_data_json: Stringified JSON array of row objects (e.g. '[{"Month":"Jan","Sales":100},{"Month":"Feb","Sales":150}]').
+    - query_data_json: The query results data (either a JSON string or a parsed list of row objects).
     """
     # 1. Parse and validate JSON data
     try:
-        data_parsed = json.loads(query_data_json)
+        if isinstance(query_data_json, str):
+            data_parsed = json.loads(query_data_json)
+        else:
+            data_parsed = query_data_json
+
         if not isinstance(data_parsed, list):
-            return "Error: query_data_json must be a JSON array of objects (e.g. '[{...}, {...}]')."
+            return "Error: query_data_json must be a JSON array of objects (e.g. '[{...}, {...}]' or a list)."
         if len(data_parsed) == 0:
             return "Error: query_data_json is empty. Cannot render chart with 0 rows."
     except json.JSONDecodeError as e:
-        return f"Error: query_data_json is not valid JSON. Details: {str(e)}"
+        return f"Error: query_data_json is not valid JSON string. Details: {str(e)}"
 
     # 2. Package the payload for the SSMS VSIX extension
     payload = {

@@ -16,6 +16,8 @@ namespace QuerySight.Extension
         private System.Windows.Threading.DispatcherTimer _connTimer;
         private static string _lastValidConnectionString;
         private static string _lastValidDatabaseName;
+        private bool _isQuickBuilderMode = false;
+        private string _lastLoadedTablesConnection = null;
 
         public QuerySightToolWindowControl()
         {
@@ -106,7 +108,210 @@ namespace QuerySight.Extension
             if (sqlPanel.Visibility == Visibility.Visible)
             {
                 UpdateActiveConnectionUI();
+                if (_isQuickBuilderMode)
+                {
+                    TriggerLoadTables();
+                }
             }
+        }
+
+        private void BtnSqlMode_Click(object sender, RoutedEventArgs e)
+        {
+            _isQuickBuilderMode = false;
+            panelSqlEditor.Visibility = Visibility.Visible;
+            panelQuickBuilder.Visibility = Visibility.Collapsed;
+
+            btnSqlMode.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x27, 0x27, 0x2A));
+            btnSqlMode.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE4, 0xE4, 0xE7));
+            btnSqlMode.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x7C, 0x3A, 0xED));
+
+            btnBuilderMode.Background = System.Windows.Media.Brushes.Transparent;
+            btnBuilderMode.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xA1, 0xA1, 0xAA));
+            btnBuilderMode.BorderBrush = System.Windows.Media.Brushes.Transparent;
+        }
+
+        private void BtnBuilderMode_Click(object sender, RoutedEventArgs e)
+        {
+            _isQuickBuilderMode = true;
+            panelSqlEditor.Visibility = Visibility.Collapsed;
+            panelQuickBuilder.Visibility = Visibility.Visible;
+
+            btnBuilderMode.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x27, 0x27, 0x2A));
+            btnBuilderMode.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE4, 0xE4, 0xE7));
+            btnBuilderMode.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x7C, 0x3A, 0xED));
+
+            btnSqlMode.Background = System.Windows.Media.Brushes.Transparent;
+            btnSqlMode.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xA1, 0xA1, 0xAA));
+            btnSqlMode.BorderBrush = System.Windows.Media.Brushes.Transparent;
+
+            TriggerLoadTables();
+        }
+
+        private async void TriggerLoadTables()
+        {
+            string connStr = GetActiveConnectionString();
+            if (string.IsNullOrEmpty(connStr))
+            {
+                txtBuilderInfo.Text = "No active connection. Open a connected query tab first.";
+                txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
+                return;
+            }
+
+            if (connStr == _lastLoadedTablesConnection && comboTables.Items.Count > 0)
+            {
+                return;
+            }
+
+            txtBuilderInfo.Text = "Loading tables and views...";
+            txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8)); // Sky Blue
+            comboTables.IsEnabled = false;
+
+            try
+            {
+                var tables = await System.Threading.Tasks.Task.Run(() => GetDatabaseTables(connStr));
+                comboTables.Items.Clear();
+                foreach (var table in tables)
+                {
+                    comboTables.Items.Add(table);
+                }
+
+                _lastLoadedTablesConnection = connStr;
+                comboTables.IsEnabled = true;
+
+                if (comboTables.Items.Count > 0)
+                {
+                    txtBuilderInfo.Text = $"Loaded {comboTables.Items.Count} tables/views. Select one to map columns.";
+                    txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green
+                }
+                else
+                {
+                    txtBuilderInfo.Text = "No tables or views found in this database.";
+                    txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
+                }
+            }
+            catch (Exception ex)
+            {
+                txtBuilderInfo.Text = $"Error loading schema: {ex.Message}";
+                txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
+            }
+        }
+
+        private async void ComboTables_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            string selectedTable = comboTables.SelectedItem as string;
+            if (string.IsNullOrEmpty(selectedTable)) return;
+
+            string connStr = GetActiveConnectionString();
+            if (string.IsNullOrEmpty(connStr)) return;
+
+            txtBuilderInfo.Text = $"Loading columns for {selectedTable}...";
+            txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8)); // Sky Blue
+            comboXAxis.IsEnabled = false;
+            comboYAxis.IsEnabled = false;
+
+            try
+            {
+                var columns = await System.Threading.Tasks.Task.Run(() => GetTableColumns(connStr, selectedTable));
+                
+                comboXAxis.Items.Clear();
+                comboYAxis.Items.Clear();
+
+                foreach (var col in columns)
+                {
+                    comboXAxis.Items.Add(col);
+                    comboYAxis.Items.Add(col);
+                }
+
+                comboXAxis.IsEnabled = true;
+                comboYAxis.IsEnabled = true;
+
+                if (comboXAxis.Items.Count > 0) comboXAxis.SelectedIndex = 0;
+                if (comboYAxis.Items.Count > 1) comboYAxis.SelectedIndex = 1;
+                else if (comboYAxis.Items.Count > 0) comboYAxis.SelectedIndex = 0;
+
+                txtBuilderInfo.Text = $"Mapped {columns.Count} columns. Choose Category and Value columns.";
+                txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // Green
+            }
+            catch (Exception ex)
+            {
+                txtBuilderInfo.Text = $"Error loading columns: {ex.Message}";
+                txtBuilderInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
+            }
+        }
+
+        private void BtnRefreshSchema_Click(object sender, RoutedEventArgs e)
+        {
+            _lastLoadedTablesConnection = null; // Force reload
+            TriggerLoadTables();
+        }
+
+        private void ComboAggregation_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Optional aggregation helper
+        }
+
+        private static System.Collections.Generic.List<string> GetDatabaseTables(string connectionString)
+        {
+            var tables = new System.Collections.Generic.List<string>();
+            string query = @"
+                SELECT TABLE_SCHEMA + '.' + TABLE_NAME AS FullTableName
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_TYPE = 'BASE TABLE' OR TABLE_TYPE = 'VIEW'
+                ORDER BY TABLE_SCHEMA, TABLE_NAME;";
+
+            using (var connection = new System.Data.SqlClient.SqlConnection(connectionString))
+            {
+                connection.Open();
+                using (var command = new System.Data.SqlClient.SqlCommand(query, connection))
+                {
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            tables.Add(reader.GetString(0));
+                        }
+                    }
+                }
+            }
+            return tables;
+        }
+
+        private static System.Collections.Generic.List<string> GetTableColumns(string connectionString, string fullTableName)
+        {
+            var columns = new System.Collections.Generic.List<string>();
+            
+            string schema = "dbo";
+            string tableName = fullTableName;
+            int dotIdx = fullTableName.IndexOf('.');
+            if (dotIdx > 0)
+            {
+                schema = fullTableName.Substring(0, dotIdx);
+                tableName = fullTableName.Substring(dotIdx + 1);
+            }
+
+            string query = @"
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @tableName
+                ORDER BY ORDINAL_POSITION;";
+
+            using (var connection = new System.Data.SqlClient.SqlConnection(connectionString))
+            {
+                connection.Open();
+                using (var command = new System.Data.SqlClient.SqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@schema", schema);
+                    command.Parameters.AddWithValue("@tableName", tableName);
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            columns.Add(reader.GetString(0));
+                        }
+                    }
+                }
+            }
+            return columns;
         }
 
         private void ConnTimer_Tick(object sender, EventArgs e)
@@ -124,6 +329,12 @@ namespace QuerySight.Extension
                     txtConnectionInfo.Text = "Connection: None (Open query tab)";
                     txtConnectionInfo.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // Red
                     return;
+                }
+
+                // If in Quick Builder mode and connection has changed, trigger table reload automatically
+                if (_isQuickBuilderMode && connString != _lastLoadedTablesConnection)
+                {
+                    TriggerLoadTables();
                 }
 
                 var builder = new System.Data.SqlClient.SqlConnectionStringBuilder(connString);
@@ -148,11 +359,50 @@ namespace QuerySight.Extension
 
         private async void BtnRunChart_Click(object sender, RoutedEventArgs e)
         {
-            string query = txtSqlScript.Text.Trim();
-            if (string.IsNullOrEmpty(query))
+            string query = "";
+            if (_isQuickBuilderMode)
             {
-                ShowStatus("Error: Please write a SQL query first.", false);
-                return;
+                string table = comboTables.SelectedItem as string;
+                string xAxis = comboXAxis.SelectedItem as string;
+                string yAxis = comboYAxis.SelectedItem as string;
+                string agg = (comboAggregation.SelectedItem as ComboBoxItem)?.Content as string ?? "None";
+
+                if (string.IsNullOrEmpty(table) || string.IsNullOrEmpty(xAxis) || string.IsNullOrEmpty(yAxis))
+                {
+                    ShowStatus("Error: Please select a Table, Category, and Value column.", false);
+                    return;
+                }
+
+                // Build query dynamically
+                string cleanTable = string.Join(".", System.Array.ConvertAll(table.Split('.'), t => "[" + t.Trim('[', ']') + "]"));
+                string cleanX = "[" + xAxis.Trim('[', ']') + "]";
+                string cleanY = "[" + yAxis.Trim('[', ']') + "]";
+
+                if (agg == "None")
+                {
+                    query = $"SELECT {cleanX}, {cleanY} FROM {cleanTable};";
+                }
+                else
+                {
+                    string aliasY = "";
+                    if (agg == "SUM") aliasY = $"[Total {yAxis.Trim('[', ']')}]";
+                    else if (agg == "AVG") aliasY = $"[Average {yAxis.Trim('[', ']')}]";
+                    else if (agg == "COUNT") aliasY = $"[Count of {yAxis.Trim('[', ']')}]";
+                    else if (agg == "MIN") aliasY = $"[Min {yAxis.Trim('[', ']')}]";
+                    else if (agg == "MAX") aliasY = $"[Max {yAxis.Trim('[', ']')}]";
+                    else aliasY = $"[{agg} of {yAxis.Trim('[', ']')}]";
+
+                    query = $"SELECT {cleanX}, {agg}({cleanY}) AS {aliasY} FROM {cleanTable} GROUP BY {cleanX};";
+                }
+            }
+            else
+            {
+                query = txtSqlScript.Text.Trim();
+                if (string.IsNullOrEmpty(query))
+                {
+                    ShowStatus("Error: Please write a SQL query first.", false);
+                    return;
+                }
             }
 
             string chartType = (comboChartType.SelectedItem as ComboBoxItem)?.Content as string ?? "bar";

@@ -41,12 +41,74 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,4">
-                    <TextBlock x:Name="txtConnectionInfo" Text="Connection: Retrieving..." Foreground="#38BDF8" FontSize="11" FontWeight="SemiBold" DockPanel.Dock="Right" TextAlignment="Right"/>
-                    <TextBlock Text="Enter SQL query (uses active SSMS connection):" Foreground="#A1A1AA" FontSize="11"/>
+                
+                <!-- Panel Header with Toggle Buttons & Connection Info -->
+                <DockPanel Grid.Row="0" LastChildFill="True" Margin="0,0,0,8">
+                    <TextBlock x:Name="txtConnectionInfo" Text="Connection: Retrieving..." Foreground="#38BDF8" FontSize="11" FontWeight="SemiBold" DockPanel.Dock="Right" VerticalAlignment="Center" TextAlignment="Right"/>
+                    
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="btnSqlMode" Content="SQL Editor" Click="BtnSqlMode_Click" Width="90" Height="22" FontSize="11"
+                                Background="#27272A" Foreground="#E4E4E7" BorderBrush="#7C3AED" BorderThickness="1" Cursor="Hand" Margin="0,0,4,0"/>
+                        <Button x:Name="btnBuilderMode" Content="Quick Builder" Click="BtnBuilderMode_Click" Width="90" Height="22" FontSize="11"
+                                Background="Transparent" Foreground="#A1A1AA" BorderBrush="Transparent" BorderThickness="1" Cursor="Hand"/>
+                    </StackPanel>
                 </DockPanel>
-                <TextBox Grid.Row="1" x:Name="txtSqlScript" Height="80" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                         Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" CaretBrush="White" FontFamily="Consolas" FontSize="12" Padding="6"/>
+
+                <!-- SQL Editor View -->
+                <Grid x:Name="panelSqlEditor" Grid.Row="1" Visibility="Visible">
+                    <TextBox x:Name="txtSqlScript" Height="85" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                             Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" CaretBrush="White" FontFamily="Consolas" FontSize="12" Padding="6"/>
+                </Grid>
+
+                <!-- Quick Builder View -->
+                <Grid x:Name="panelQuickBuilder" Grid.Row="1" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="1.5*"/>
+                        <ColumnDefinition Width="1.5*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Table Selection -->
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,6,6">
+                        <TextBlock Text="Table / View:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <DockPanel>
+                            <Button x:Name="btnRefreshSchema" Content="🔄" Click="BtnRefreshSchema_Click" Width="22" Height="22" Background="#27272A" Foreground="#E4E4E7" BorderBrush="#3F3F46" Cursor="Hand" DockPanel.Dock="Right" ToolTip="Refresh active database tables"/>
+                            <ComboBox x:Name="comboTables" Height="22" SelectionChanged="ComboTables_SelectionChanged" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4"/>
+                        </DockPanel>
+                    </StackPanel>
+
+                    <!-- Aggregation -->
+                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,6,6">
+                        <TextBlock Text="Aggregation:" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboAggregation" Height="22" SelectedIndex="0" SelectionChanged="ComboAggregation_SelectionChanged" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4">
+                            <ComboBoxItem Content="None"/>
+                            <ComboBoxItem Content="SUM"/>
+                            <ComboBoxItem Content="AVG"/>
+                            <ComboBoxItem Content="COUNT"/>
+                            <ComboBoxItem Content="MIN"/>
+                            <ComboBoxItem Content="MAX"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- X-Axis Column -->
+                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,6,6">
+                        <TextBlock Text="Category (X-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboXAxis" Height="22" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4"/>
+                    </StackPanel>
+
+                    <!-- Y-Axis Column -->
+                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="0,0,0,6">
+                        <TextBlock Text="Value (Y-Axis):" Foreground="#A1A1AA" FontSize="10" Margin="0,0,0,2"/>
+                        <ComboBox x:Name="comboYAxis" Height="22" Background="#18181B" Foreground="#F4F4F5" BorderBrush="#27272A" Padding="4"/>
+                    </StackPanel>
+                    
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" x:Name="txtBuilderInfo" Text="Select a table to begin mapping columns." Foreground="#71717A" FontSize="10" FontWeight="Normal" Margin="0,2,0,0"/>
+                </Grid>
             </Grid>
         </Border>
 

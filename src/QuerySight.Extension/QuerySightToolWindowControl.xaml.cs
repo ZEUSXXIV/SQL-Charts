@@ -18,6 +18,7 @@ namespace QuerySight.Extension
         private static string _lastValidDatabaseName;
         private bool _isQuickBuilderMode = false;
         private string _lastLoadedTablesConnection = null;
+        private double _lastSqlPanelHeight = 200;
 
         public QuerySightToolWindowControl()
         {
@@ -110,9 +111,24 @@ namespace QuerySight.Extension
 
         private void BtnToggleSql_Click(object sender, RoutedEventArgs e)
         {
-            sqlPanel.Visibility = sqlPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
             if (sqlPanel.Visibility == Visibility.Visible)
             {
+                sqlPanel.Visibility = Visibility.Collapsed;
+                if (gridSplitter != null) gridSplitter.Visibility = Visibility.Collapsed;
+                if (rowSqlPanel != null)
+                {
+                    _lastSqlPanelHeight = rowSqlPanel.Height.Value > 50 ? rowSqlPanel.Height.Value : 200;
+                    rowSqlPanel.Height = new GridLength(0);
+                }
+            }
+            else
+            {
+                sqlPanel.Visibility = Visibility.Visible;
+                if (gridSplitter != null) gridSplitter.Visibility = Visibility.Visible;
+                if (rowSqlPanel != null)
+                {
+                    rowSqlPanel.Height = new GridLength(_lastSqlPanelHeight);
+                }
                 UpdateActiveConnectionUI();
                 TriggerLoadTables();
             }

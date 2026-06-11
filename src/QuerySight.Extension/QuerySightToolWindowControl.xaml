@@ -134,7 +134,8 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition x:Name="rowSqlPanel" Height="200" MinHeight="100"/>
+            <RowDefinition x:Name="rowSplitter" Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -159,7 +160,7 @@
         </Border>
 
         <!-- Collapsible SQL Input Panel -->
-        <Border x:Name="sqlPanel" Grid.Row="1" Background="#09090B" BorderBrush="#27272A" BorderThickness="0,0,0,1" Padding="8" Visibility="Collapsed">
+        <Border x:Name="sqlPanel" Grid.Row="1" Background="#09090B" BorderBrush="#27272A" BorderThickness="0,0,0,1" Padding="8" Visibility="Visible">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -179,7 +180,7 @@
                 </DockPanel>
 
                 <!-- SQL Editor View -->
-                <Grid x:Name="panelSqlEditor" Grid.Row="1" Visibility="Visible" Height="130">
+                <Grid x:Name="panelSqlEditor" Grid.Row="1" Visibility="Visible" VerticalAlignment="Stretch">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="200" MinWidth="100" x:Name="colSidebar"/>
                         <ColumnDefinition Width="4"/>
@@ -272,8 +273,11 @@
             </Grid>
         </Border>
 
+        <!-- Horizontal Resizing Splitter -->
+        <GridSplitter x:Name="gridSplitter" Grid.Row="2" Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#27272A" ResizeBehavior="PreviousAndNext" Visibility="Visible"/>
+
         <!-- Main Charting View -->
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <wv2:WebView2 x:Name="webView" 
                           HorizontalAlignment="Stretch" 
                           VerticalAlignment="Stretch" 

@@ -42,7 +42,7 @@ async def render_ssms_chart(chart_type: str, title: str, query_data_json: Any) -
     uri = "ws://localhost:8080/chartbridge/"
     try:
         # Establish WebSocket connection with a 5-second timeout
-        async with websockets.connect(uri, timeout=5.0) as websocket:
+        async with websockets.connect(uri, open_timeout=5.0) as websocket:
             # Send JSON payload
             await websocket.send(json.dumps(payload))
             
